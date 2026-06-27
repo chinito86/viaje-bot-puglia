@@ -71,7 +71,7 @@ async def cmd_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    pattern = r'/gasto\s+([\d.]+)\s+([A-Z]+)\s+(\w+)\s+(\w+)\s*-?\s*(.*)'
+    pattern = r'/gasto\s+([\d.]+)\s+(\w+)\s+(\w+)\s+(\w+)\s*-?\s*(.*)'
     match = re.match(pattern, text, re.IGNORECASE)
     
     if not match:
