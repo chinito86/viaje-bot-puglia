@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import threading
+import time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
@@ -128,26 +129,43 @@ class HealthHandler(BaseHTTPRequestHandler):
         pass
 
 def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    max_retries = 5
+    retry_count = 0
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("resumen", cmd_resumen))
-    app.add_handler(CommandHandler("help", cmd_help))
-    app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
-    app.add_error_handler(error_handler)
-    
-    port = int(os.getenv("PORT", 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthHandler)
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-    logger.info(f"Health check puerto {port}")
-    logger.info("Bot iniciado")
-    
-    try:
-        app.run_polling()
-    except RuntimeError:
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        app.run_polling()
+    while retry_count < max_retries:
+        try:
+            app = Application.builder().token(TELEGRAM_TOKEN).build()
+            
+            app.add_handler(CommandHandler("start", start))
+            app.add_handler(CommandHandler("resumen", cmd_resumen))
+            app.add_handler(CommandHandler("help", cmd_help))
+            app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
+            app.add_error_handler(error_handler)
+            
+            port = int(os.getenv("PORT", 10000))
+            server = HTTPServer(('0.0.0.0', port), HealthHandler)
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            logger.info(f"Health check puerto {port}")
+            logger.info("Bot iniciado - intento {}/{}".format(retry_count + 1, max_retries))
+            
+            try:
+                app.run_polling()
+            except RuntimeError:
+                asyncio.set_event_loop(asyncio.new_event_loop())
+                app.run_polling()
+                
+        except Exception as e:
+            retry_count += 1
+            logger.error(f"Error en bot (intento {retry_count}/{max_retries}): {e}")
+            
+            if retry_count < max_retries:
+                logger.info(f"Reintentando en 10 segundos...")
+                import time
+                time.sleep(10)
+            else:
+                logger.error("Máximo de reintentos alcanzado")
+                raise
 
 if __name__ == "__main__":
     main()
