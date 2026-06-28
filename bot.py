@@ -75,6 +75,7 @@ def get_gastos_summary():
             persona_raw = row_clean.get("Persona", "").strip()
             monto_str = row_clean.get("Monto", "0")
             
+            # Buscar la persona correcta en PEOPLE
             persona_match = None
             for p in PEOPLE:
                 if p.lower() == persona_raw.lower():
@@ -102,15 +103,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    pattern = r'/gasto\s+([\d.]+)\s+(\w+)\s+(\w+)\s+(\w+)\s*-?\s*(.*)'
+    text = update.message.text.strip()
+    
+    # Patrón más flexible
+    pattern = r'/gasto\s+(.+)'
     match = re.match(pattern, text, re.IGNORECASE)
     
     if not match:
         await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
         return
     
-    monto, moneda, categoria, persona, descripcion = match.groups()
+    # Parsear: "25 EUR comida chinito - test"
+    args_text = match.group(1)
+    parts = args_text.split()
+    
+    if len(parts) < 4:
+        await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
+        return
+    
+    monto = parts[0]
+    moneda = parts[1]
+    categoria = parts[2]
+    persona = parts[3]
+    descripcion = " ".join(parts[4:]) if len(parts) > 4 else ""
+    
+    # Limpiar descripción (remover guión al inicio si existe)
+    if descripcion.startswith("-"):
+        descripcion = descripcion[1:].strip()
     
     if persona.lower() not in [p.lower() for p in PEOPLE]:
         await update.message.reply_text(f"Persona invalida. Usa: {', '.join(PEOPLE)}")
