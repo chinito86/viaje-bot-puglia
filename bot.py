@@ -33,7 +33,7 @@ USERNAME_MAP = {
     "dz": "Dieguito",
     "tominatomina": "Ollaze",
     "chinitocava": "Chinito",
-    "pablitodm": "Pablito"
+    "pablodmmm": "Pablito"
 }
 
 def init_sheets():
