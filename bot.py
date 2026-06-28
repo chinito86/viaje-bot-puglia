@@ -284,6 +284,11 @@ class HealthHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+class ReuseAddrHTTPServer(HTTPServer):
+    def server_bind(self):
+        self.socket.setsockopt(1, 15, 1)  # SO_REUSEADDR
+        HTTPServer.server_bind(self)
+
 def main():
     max_retries = 5
     retry_count = 0
@@ -301,7 +306,7 @@ def main():
             app.add_error_handler(error_handler)
             
             port = int(os.getenv("PORT", 10000))
-            server = HTTPServer(('0.0.0.0', port), HealthHandler)
+            server = ReuseAddrHTTPServer(('0.0.0.0', port), HealthHandler)
             server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             server_thread.start()
             logger.info(f"Health check puerto {port}")
