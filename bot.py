@@ -61,7 +61,32 @@ def add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
         logger.error(f"Error add_gasto: {e}")
         return False
 
-def get_gastos_summary():
+def get_gastos_list():
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return []
+        gastos = sheet.worksheet("Gastos")
+        data = gastos.get_all_records()
+        return data
+    except Exception as e:
+        logger.error(f"Error get_gastos_list: {e}")
+        return []
+
+def delete_gasto(index):
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return False
+        gastos = sheet.worksheet("Gastos")
+        # index es 0-based, pero en sheets la fila 1 es header
+        # Así que row_number = index + 2
+        gastos.delete_rows(index + 2)
+        logger.info(f"Gasto eliminado: fila {index + 2}")
+        return True
+    except Exception as e:
+        logger.error(f"Error delete_gasto: {e}")
+        return False
     try:
         sheet = init_sheets()
         if not sheet:
@@ -195,8 +220,56 @@ Después del - puedes escribir cualquier cosa como descripción.
 Categorías: Alojamiento, Comida, Transporte, Drinks, Actividades, Misc
 Monedas: EUR, USD, ARS
 
-/resumen - Ver totales por persona"""
+/resumen - Ver totales por persona
+/borrar - Eliminar gasto"""
     await update.message.reply_text(msg)
+
+async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    
+    # Si solo escribió /borrar, mostrar últimos gastos
+    if text == "/borrar":
+        gastos = get_gastos_list()
+        if not gastos:
+            await update.message.reply_text("No hay gastos para borrar")
+            return
+        
+        # Mostrar últimos 5 gastos
+        ultimos = gastos[-5:] if len(gastos) > 5 else gastos
+        msg = "Últimos gastos:\n\n"
+        for i, gasto in enumerate(ultimos):
+            idx = len(gastos) - len(ultimos) + i
+            fecha = gasto.get("Fecha", "")
+            persona = gasto.get("Persona", "")
+            categoria = gasto.get("Categoría", "")
+            monto = gasto.get("Monto", "")
+            moneda = gasto.get("Moneda ", "")
+            msg += f"{i}: {fecha} - {persona} - {monto} {moneda} - {categoria}\n"
+        
+        msg += "\nPara borrar: /borrar 0 (o el número)"
+        await update.message.reply_text(msg)
+        return
+    
+    # Si escribió /borrar [numero]
+    match = re.match(r'/borrar\s+(\d+)', text)
+    if match:
+        try:
+            num = int(match.group(1))
+            gastos = get_gastos_list()
+            
+            if num < 0 or num >= len(gastos):
+                await update.message.reply_text("Número inválido")
+                return
+            
+            gasto = gastos[num]
+            if delete_gasto(num):
+                msg = f"Gasto borrado:\n{gasto.get('Persona')} - {gasto.get('Monto')} {gasto.get('Moneda ')}"
+                await update.message.reply_text(msg)
+            else:
+                await update.message.reply_text("Error al borrar")
+        except Exception as e:
+            logger.error(f"Error en cmd_borrar: {e}")
+            await update.message.reply_text("Error al borrar")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
@@ -222,7 +295,9 @@ def main():
             app.add_handler(CommandHandler("start", start))
             app.add_handler(CommandHandler("resumen", cmd_resumen))
             app.add_handler(CommandHandler("help", cmd_help))
+            app.add_handler(CommandHandler("borrar", cmd_borrar))
             app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
+            app.add_handler(MessageHandler(filters.Regex(r"^/borrar"), cmd_borrar))
             app.add_error_handler(error_handler)
             
             port = int(os.getenv("PORT", 10000))
