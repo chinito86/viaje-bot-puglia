@@ -28,6 +28,14 @@ except Exception as e:
 PEOPLE = ["Chinito", "Dieguito", "Pablito", "Ollaze"]
 CATEGORIES = ["Alojamiento", "Comida", "Transporte", "Drinks", "Actividades", "Misc"]
 
+# Mapeo de usernames a personas
+USERNAME_MAP = {
+    "dz": "Dieguito",
+    "tominatomina": "Ollaze",
+    "chinitocava": "Chinito",
+    "pablitodm": "Pablito"
+}
+
 def init_sheets():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -104,28 +112,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    username = update.message.from_user.username
+    
+    # Auto-detectar persona por username
+    persona_auto = USERNAME_MAP.get(username.lower()) if username else None
     
     # Patrón más flexible
     pattern = r'/gasto\s+(.+)'
     match = re.match(pattern, text, re.IGNORECASE)
     
     if not match:
-        await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
+        # Si solo escribió /gasto, usar persona auto-detectada
+        if persona_auto:
+            await update.message.reply_text(f"Persona detectada: {persona_auto}\n\nFormato: /gasto 25 EUR comida - descripcion")
+        else:
+            await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
         return
     
     # Parsear: "25 EUR comida chinito - test"
     args_text = match.group(1)
     parts = args_text.split()
     
-    if len(parts) < 4:
-        await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
+    if len(parts) < 3:
+        await update.message.reply_text("Formato: /gasto 25 EUR comida [persona] - descripcion")
         return
     
     monto = parts[0]
     moneda = parts[1]
     categoria = parts[2]
-    persona = parts[3]
-    descripcion = " ".join(parts[4:]) if len(parts) > 4 else ""
+    
+    # Si hay 4+ partes, la 4ta es persona. Si no, usar auto-detectada
+    if len(parts) >= 4 and parts[3].lower() in [p.lower() for p in PEOPLE]:
+        persona = parts[3]
+        descripcion = " ".join(parts[4:]) if len(parts) > 4 else ""
+    elif persona_auto:
+        persona = persona_auto
+        descripcion = " ".join(parts[3:]) if len(parts) > 3 else ""
+    else:
+        await update.message.reply_text("Persona no especificada y no detectada por username")
+        return
     
     # Limpiar descripción (remover guión al inicio si existe)
     if descripcion.startswith("-"):
