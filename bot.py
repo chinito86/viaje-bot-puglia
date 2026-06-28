@@ -180,7 +180,22 @@ async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = "AYUDA\n\n/gasto - Registrar gasto\n/resumen - Ver totales"
+    msg = """AYUDA
+
+/gasto - Registrar gasto
+Formato: /gasto 25 EUR comida - descripcion
+
+Ejemplos:
+/gasto 25 EUR comida - Pasta en Bari
+/gasto 45 EUR transporte - Uber desde hotel
+/gasto 10 EUR drinks - Cerveza en playa
+
+Después del - puedes escribir cualquier cosa como descripción.
+
+Categorías: Alojamiento, Comida, Transporte, Drinks, Actividades, Misc
+Monedas: EUR, USD, ARS
+
+/resumen - Ver totales por persona"""
     await update.message.reply_text(msg)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
