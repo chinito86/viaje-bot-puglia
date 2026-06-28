@@ -72,14 +72,20 @@ def get_gastos_summary():
             row_clean = {k.strip(): v for k, v in row.items()}
             logger.info(f"Fila {i}: {row_clean}")
             
-            persona = row_clean.get("Persona", "").strip()
+            persona_raw = row_clean.get("Persona", "").strip()
             monto_str = row_clean.get("Monto", "0")
             
-            if persona.lower() in [p.lower() for p in PEOPLE]:
+            persona_match = None
+            for p in PEOPLE:
+                if p.lower() == persona_raw.lower():
+                    persona_match = p
+                    break
+            
+            if persona_match:
                 try:
                     monto = float(str(monto_str).strip() or 0)
-                    resumen[persona] += monto
-                    logger.info(f"Agregado: {persona} + {monto}")
+                    resumen[persona_match] += monto
+                    logger.info(f"Agregado: {persona_match} + {monto}")
                 except Exception as e:
                     logger.error(f"Error parsing monto '{monto_str}': {e}")
         
