@@ -43,3 +43,146 @@ def add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
         sheet = init_sheets()
         if not sheet:
             return False
+        gastos = sheet.worksheet("Gastos")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        row = [fecha, persona, categoria, monto, moneda, descripcion, "", timestamp]
+        gastos.append_row(row)
+        logger.info(f"Gasto: {persona} {monto} {moneda}")
+        return True
+    except Exception as e:
+        logger.error(f"Error add_gasto: {e}")
+        return False
+
+def get_gastos_summary():
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            logger.error("No se pudo conectar a Sheets")
+            return {}
+        gastos = sheet.worksheet("Gastos")
+        data = gastos.get_all_records()
+        
+        logger.info(f"Leyendo {len(data)} filas de Gastos")
+        if data:
+            logger.info(f"Headers: {list(data[0].keys())}")
+        
+        resumen = {p: 0 for p in PEOPLE}
+        
+        for i, row in enumerate(data):
+            row_clean = {k.strip(): v for k, v in row.items()}
+            logger.info(f"Fila {i}: {row_clean}")
+            
+            persona = row_clean.get("Persona", "").strip()
+            monto_str = row_clean.get("Monto", "0")
+            
+            if persona.lower() in [p.lower() for p in PEOPLE]:
+                try:
+                    monto = float(str(monto_str).strip() or 0)
+                    resumen[persona] += monto
+                    logger.info(f"Agregado: {persona} + {monto}")
+                except Exception as e:
+                    logger.error(f"Error parsing monto '{monto_str}': {e}")
+        
+        logger.info(f"Resumen final: {resumen}")
+        return resumen
+    except Exception as e:
+        logger.error(f"Error get_gastos_summary: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = "Bot Gastos Puglia 2026\n\n/gasto - Registrar gasto\n/resumen - Ver totales\n/help - Ayuda"
+    await update.message.reply_text(msg)
+
+async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    pattern = r'/gasto\s+([\d.]+)\s+(\w+)\s+(\w+)\s+(\w+)\s*-?\s*(.*)'
+    match = re.match(pattern, text, re.IGNORECASE)
+    
+    if not match:
+        await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
+        return
+    
+    monto, moneda, categoria, persona, descripcion = match.groups()
+    
+    if persona.lower() not in [p.lower() for p in PEOPLE]:
+        await update.message.reply_text(f"Persona invalida. Usa: {', '.join(PEOPLE)}")
+        return
+    
+    if categoria.lower() not in [c.lower() for c in CATEGORIES]:
+        await update.message.reply_text(f"Categoria invalida. Usa: {', '.join(CATEGORIES)}")
+        return
+    
+    fecha = datetime.now().strftime("%Y-%m-%d")
+    if add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
+        msg = f"Gasto registrado:\n{persona}\n{monto} {moneda}\n{categoria}"
+        await update.message.reply_text(msg)
+    else:
+        await update.message.reply_text("Error al guardar")
+
+async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    summary = get_gastos_summary()
+    msg = "RESUMEN:\n\n"
+    for persona in PEOPLE:
+        total = summary.get(persona, 0)
+        msg += f"{persona}: ${total:.2f}\n"
+    await update.message.reply_text(msg)
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = "AYUDA\n\n/gasto - Registrar gasto\n/resumen - Ver totales"
+    await update.message.reply_text(msg)
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Error: {context.error}")
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Bot running')
+    
+    def log_message(self, format, *args):
+        pass
+
+def main():
+    max_retries = 5
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            app = Application.builder().token(TELEGRAM_TOKEN).build()
+            
+            app.add_handler(CommandHandler("start", start))
+            app.add_handler(CommandHandler("resumen", cmd_resumen))
+            app.add_handler(CommandHandler("help", cmd_help))
+            app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
+            app.add_error_handler(error_handler)
+            
+            port = int(os.getenv("PORT", 10000))
+            server = HTTPServer(('0.0.0.0', port), HealthHandler)
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            logger.info(f"Health check puerto {port}")
+            logger.info("Bot iniciado - intento {}/{}".format(retry_count + 1, max_retries))
+            
+            try:
+                app.run_polling()
+            except RuntimeError:
+                asyncio.set_event_loop(asyncio.new_event_loop())
+                app.run_polling()
+                
+        except Exception as e:
+            retry_count += 1
+            logger.error(f"Error en bot (intento {retry_count}/{max_retries}): {e}")
+            
+            if retry_count < max_retries:
+                logger.info(f"Reintentando en 10 segundos...")
+                time.sleep(10)
+            else:
+                logger.error("Máximo de reintentos alcanzado")
+                raise
+
+if __name__ == "__main__":
+    main()
