@@ -11,6 +11,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import re
 import asyncio
+import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,7 +29,6 @@ except Exception as e:
 PEOPLE = ["Chinito", "Dieguito", "Pablito", "Ollaze"]
 CATEGORIES = ["Alojamiento", "Comida", "Transporte", "Drinks", "Actividades", "Misc"]
 
-# Mapeo de usernames a personas
 USERNAME_MAP = {
     "dz": "Dieguito",
     "tominatomina": "Ollaze",
@@ -79,14 +79,14 @@ def delete_gasto(index):
         if not sheet:
             return False
         gastos = sheet.worksheet("Gastos")
-        # index es 0-based, pero en sheets la fila 1 es header
-        # Así que row_number = index + 2
         gastos.delete_rows(index + 2)
         logger.info(f"Gasto eliminado: fila {index + 2}")
         return True
     except Exception as e:
         logger.error(f"Error delete_gasto: {e}")
         return False
+
+def get_gastos_summary():
     try:
         sheet = init_sheets()
         if not sheet:
@@ -108,7 +108,6 @@ def delete_gasto(index):
             persona_raw = row_clean.get("Persona", "").strip()
             monto_str = row_clean.get("Monto", "0")
             
-            # Buscar la persona correcta en PEOPLE
             persona_match = None
             for p in PEOPLE:
                 if p.lower() == persona_raw.lower():
@@ -139,22 +138,18 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     username = update.message.from_user.username
     
-    # Auto-detectar persona por username
     persona_auto = USERNAME_MAP.get(username.lower()) if username else None
     
-    # Patrón más flexible
     pattern = r'/gasto\s+(.+)'
     match = re.match(pattern, text, re.IGNORECASE)
     
     if not match:
-        # Si solo escribió /gasto, usar persona auto-detectada
         if persona_auto:
             await update.message.reply_text(f"Persona detectada: {persona_auto}\n\nFormato: /gasto 25 EUR comida - descripcion")
         else:
             await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
         return
     
-    # Parsear: "25 EUR comida chinito - test"
     args_text = match.group(1)
     parts = args_text.split()
     
@@ -166,7 +161,6 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     moneda = parts[1]
     categoria = parts[2]
     
-    # Si hay 4+ partes, la 4ta es persona. Si no, usar auto-detectada
     if len(parts) >= 4 and parts[3].lower() in [p.lower() for p in PEOPLE]:
         persona = parts[3]
         descripcion = " ".join(parts[4:]) if len(parts) > 4 else ""
@@ -177,7 +171,6 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Persona no especificada y no detectada por username")
         return
     
-    # Limpiar descripción (remover guión al inicio si existe)
     if descripcion.startswith("-"):
         descripcion = descripcion[1:].strip()
     
@@ -204,37 +197,15 @@ async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += f"{persona}: ${total:.2f}\n"
     await update.message.reply_text(msg)
 
-async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = """AYUDA
-
-/gasto - Registrar gasto
-Formato: /gasto 25 EUR comida - descripcion
-
-Ejemplos:
-/gasto 25 EUR comida - Pasta en Bari
-/gasto 45 EUR transporte - Uber desde hotel
-/gasto 10 EUR drinks - Cerveza en playa
-
-Después del - puedes escribir cualquier cosa como descripción.
-
-Categorías: Alojamiento, Comida, Transporte, Drinks, Actividades, Misc
-Monedas: EUR, USD, ARS
-
-/resumen - Ver totales por persona
-/borrar - Eliminar gasto"""
-    await update.message.reply_text(msg)
-
 async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
-    # Si solo escribió /borrar, mostrar últimos gastos
     if text == "/borrar":
         gastos = get_gastos_list()
         if not gastos:
             await update.message.reply_text("No hay gastos para borrar")
             return
         
-        # Mostrar últimos 5 gastos
         ultimos = gastos[-5:] if len(gastos) > 5 else gastos
         msg = "Últimos gastos:\n\n"
         for i, gasto in enumerate(ultimos):
@@ -250,7 +221,6 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg)
         return
     
-    # Si escribió /borrar [numero]
     match = re.match(r'/borrar\s+(\d+)', text)
     if match:
         try:
@@ -271,6 +241,26 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error en cmd_borrar: {e}")
             await update.message.reply_text("Error al borrar")
 
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = """AYUDA
+
+/gasto - Registrar gasto
+Formato: /gasto 25 EUR comida - descripcion
+
+Ejemplos:
+/gasto 25 EUR comida - Pasta en Bari
+/gasto 45 EUR transporte - Uber desde hotel
+/gasto 10 EUR drinks - Cerveza en playa
+
+Después del - puedes escribir cualquier cosa como descripción.
+
+Categorías: Alojamiento, Comida, Transporte, Drinks, Actividades, Misc
+Monedas: EUR, USD, ARS
+
+/resumen - Ver totales por persona
+/borrar - Eliminar gasto"""
+    await update.message.reply_text(msg)
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
@@ -286,8 +276,19 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 class ReuseAddrHTTPServer(HTTPServer):
     def server_bind(self):
-        self.socket.setsockopt(1, 15, 1)  # SO_REUSEADDR
+        self.socket.setsockopt(1, 15, 1)
         HTTPServer.server_bind(self)
+
+def keep_alive():
+    """Hace ping cada 10 minutos para evitar que Render detenga la instancia"""
+    while True:
+        try:
+            time.sleep(600)  # 10 minutos
+            url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:10000")
+            requests.get(url, timeout=5)
+            logger.info("Keep-alive ping enviado")
+        except Exception as e:
+            logger.debug(f"Keep-alive error (ignorado): {e}")
 
 def main():
     max_retries = 5
@@ -310,6 +311,12 @@ def main():
             server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             server_thread.start()
             logger.info(f"Health check puerto {port}")
+            
+            # Iniciar keep-alive
+            keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+            keep_alive_thread.start()
+            logger.info("Keep-alive iniciado (ping cada 10 minutos)")
+            
             logger.info("Bot iniciado - intento {}/{}".format(retry_count + 1, max_retries))
             
             try:
@@ -331,3 +338,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
