@@ -131,7 +131,7 @@ def get_gastos_summary():
         return {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = "Bot Gastos Puglia 2026\n\n/gasto - Registrar gasto\n/resumen - Ver totales\n/help - Ayuda"
+    msg = "🤖 Bot Gastos Puglia 2026\n\n💰 /gasto - Registrar gasto\n📊 /resumen - Ver totales\n❓ /help - Ayuda"
     await update.message.reply_text(msg)
 
 async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -145,16 +145,16 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not match:
         if persona_auto:
-            await update.message.reply_text(f"Persona detectada: {persona_auto}\n\nFormato: /gasto 25 EUR comida - descripcion")
+            await update.message.reply_text(f"👤 Persona detectada: {persona_auto}\n\n💬 Formato: /gasto 25 EUR comida - descripcion")
         else:
-            await update.message.reply_text("Formato: /gasto 25 EUR comida chinito - descripcion")
+            await update.message.reply_text("💬 Formato: /gasto 25 EUR comida chinito - descripcion")
         return
     
     args_text = match.group(1)
     parts = args_text.split()
     
     if len(parts) < 3:
-        await update.message.reply_text("Formato: /gasto 25 EUR comida [persona] - descripcion")
+        await update.message.reply_text("💬 Formato: /gasto 25 EUR comida [persona] - descripcion")
         return
     
     monto = parts[0]
@@ -168,33 +168,33 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         persona = persona_auto
         descripcion = " ".join(parts[3:]) if len(parts) > 3 else ""
     else:
-        await update.message.reply_text("Persona no especificada y no detectada por username")
+        await update.message.reply_text("⚠️ Persona no especificada y no detectada por username")
         return
     
     if descripcion.startswith("-"):
         descripcion = descripcion[1:].strip()
     
     if persona.lower() not in [p.lower() for p in PEOPLE]:
-        await update.message.reply_text(f"Persona invalida. Usa: {', '.join(PEOPLE)}")
+        await update.message.reply_text(f"⚠️ Persona invalida. Usa: {', '.join(PEOPLE)}")
         return
     
     if categoria.lower() not in [c.lower() for c in CATEGORIES]:
-        await update.message.reply_text(f"Categoria invalida. Usa: {', '.join(CATEGORIES)}")
+        await update.message.reply_text(f"⚠️ Categoria invalida. Usa: {', '.join(CATEGORIES)}")
         return
     
     fecha = datetime.now().strftime("%Y-%m-%d")
     if add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
-        msg = f"Gasto registrado:\n{persona}\n{monto} {moneda}\n{categoria}"
+        msg = f"✅ Gasto registrado:\n👤 {persona}\n💵 {monto} {moneda}\n🏷️ {categoria}"
         await update.message.reply_text(msg)
     else:
-        await update.message.reply_text("Error al guardar")
+        await update.message.reply_text("❌ Error al guardar")
 
 async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = get_gastos_summary()
-    msg = "RESUMEN:\n\n"
+    msg = "📊 RESUMEN:\n\n"
     for persona in PEOPLE:
         total = summary.get(persona, 0)
-        msg += f"{persona}: ${total:.2f}\n"
+        msg += f"👤 {persona}: 💵 ${total:.2f}\n"
     await update.message.reply_text(msg)
 
 async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -242,23 +242,23 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Error al borrar")
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = """AYUDA
+    msg = """❓ AYUDA
 
-/gasto - Registrar gasto
+💰 /gasto - Registrar gasto
 Formato: /gasto 25 EUR comida - descripcion
 
-Ejemplos:
-/gasto 25 EUR comida - Pasta en Bari
-/gasto 45 EUR transporte - Uber desde hotel
-/gasto 10 EUR drinks - Cerveza en playa
+📝 Ejemplos:
+🍝 /gasto 25 EUR comida - Pasta en Bari
+🚖 /gasto 45 EUR transporte - Uber desde hotel
+🍺 /gasto 10 EUR drinks - Cerveza en playa
 
-Después del - puedes escribir cualquier cosa como descripción.
+💬 Después del - puedes escribir cualquier cosa como descripción.
 
-Categorías: Alojamiento, Comida, Transporte, Drinks, Actividades, Misc
-Monedas: EUR, USD, ARS
+🏷️ Categorías: Alojamiento, Comida, Transporte, Drinks, Actividades, Misc
+💵 Monedas: EUR, USD, ARS
 
-/resumen - Ver totales por persona
-/borrar - Eliminar gasto"""
+📊 /resumen - Ver totales por persona
+🗑️ /borrar - Eliminar gasto"""
     await update.message.reply_text(msg)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -338,4 +338,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
