@@ -325,18 +325,40 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     match = re.match(pattern, text)
     
     if not match:
-        await update.message.reply_text("💬 Formato: /evento 23-07 14:48 vuelo Aeropuerto Descripcion [Ref] [MapLink] [VoucherLink]")
+        await update.message.reply_text('💬 Formato: /evento 23-07 14:48 vuelo "Lugar completo" [Links]')
         return
     
-    args = match.group(1).split()
-    if len(args) < 4:
-        await update.message.reply_text("💬 Mínimo: /evento FECHA HORA TIPO LUGAR")
+    resto = match.group(1)
+    partes = resto.split()
+    
+    if len(partes) < 4:
+        await update.message.reply_text('💬 Mínimo: /evento FECHA HORA TIPO "LUGAR"')
         return
     
-    fecha_str = args[0]
-    hora_str = args[1]
-    tipo_str = args[2].lower()
-    lugar = args[3]
+    fecha_str = partes[0]
+    hora_str = partes[1]
+    tipo_str = partes[2].lower()
+    
+    # Buscar lugar entre comillas
+    lugar_match = re.search(r'"([^"]+)"', resto)
+    if lugar_match:
+        lugar = lugar_match.group(1)
+        # Remover el lugar con comillas del texto para buscar links
+        todo_lo_demás = resto.replace(f'"{lugar}"', "").strip()
+    else:
+        # Si no hay comillas, tomar el próximo argumento
+        lugar = partes[3]
+        todo_lo_demás = " ".join(partes[4:])
+    
+    # Buscar URLs
+    maps_link = ""
+    voucher_link = ""
+    urls = re.findall(r'https?://\S+', todo_lo_demás)
+    for url in urls:
+        if "drive" in url:
+            voucher_link = url
+        elif "maps" in url:
+            maps_link = url
     
     # Validar fecha
     fecha = parse_fecha(fecha_str)
@@ -360,30 +382,14 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not tipo_match:
         tipo_match = tipo_str.capitalize()
     
-    # Recopilar opcionales
-    descripcion = " ".join(args[4:]) if len(args) > 4 else ""
-    ref = ""
-    maps_link = generate_maps_link(tipo_match, lugar)
-    voucher_link = ""
+    # Generar Maps link si no existe
+    if not maps_link:
+        maps_link = generate_maps_link(tipo_match, lugar)
     
-    # Separar referencias y links si existen
-    if "http" in descripcion:
-        partes = descripcion.split("http")
-        descripcion = partes[0]
-        for i, parte in enumerate(partes[1:]):
-            url = "http" + parte
-            if "drive" in url:
-                voucher_link = url.split()[0]
-            elif "maps" in url:
-                maps_link = url.split()[0]
-    
-    if add_evento(str(fecha), hora_str, tipo_match, lugar, descripcion, ref, maps_link, voucher_link):
-        msg = f"✅ Evento agregado:\n🗓️ {tipo_match}\n📅 {fecha} {hora_str}\n📍 {lugar}"
-        if descripcion:
-            msg += f"\n📝 {descripcion}"
+    if add_evento(str(fecha), hora_str, tipo_match, lugar, maps_link=maps_link, voucher_link=voucher_link):
+        msg = f"✅ Evento agregado:\n🗓️ {tipo_match}\n📅 {fecha} {hora_str}\n📍 {lugar}\n🗺️ [Maps]({maps_link})"
         if voucher_link:
             msg += f"\n📄 [Voucher]({voucher_link})"
-        msg += f"\n🗺️ [Maps]({maps_link})"
         await update.message.reply_text(msg)
     else:
         await update.message.reply_text("❌ Error al guardar evento")
