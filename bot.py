@@ -190,9 +190,25 @@ def get_eventos_by_date(fecha):
         logger.error(f"Error get_eventos_by_date: {e}")
         return []
 
-def generate_maps_link(lugar):
-    """Genera link a Google Maps"""
-    return f"https://www.google.com/maps/search/{lugar.replace(' ', '+')}"
+def generate_maps_link(tipo, lugar):
+    """Genera link a Google Maps más específico según tipo de evento"""
+    tipo_lower = tipo.lower()
+    
+    # Agregar contexto según tipo
+    if "hospedaje" in tipo_lower or "hotel" in tipo_lower:
+        busqueda = f"Hotel {lugar}"
+    elif "vuelo" in tipo_lower or "aeropuerto" in tipo_lower:
+        busqueda = f"Aeropuerto {lugar}"
+    elif "tren" in tipo_lower or "estacion" in tipo_lower:
+        busqueda = f"Estación {lugar}"
+    elif "rent" in tipo_lower or "auto" in tipo_lower:
+        busqueda = f"Rent a Car {lugar}"
+    elif "comida" in tipo_lower or "restaurante" in tipo_lower:
+        busqueda = f"Restaurante {lugar}"
+    else:
+        busqueda = lugar
+    
+    return f"https://www.google.com/maps/search/{busqueda.replace(' ', '+')}"
 
 # ===== COMANDOS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -347,7 +363,7 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Recopilar opcionales
     descripcion = " ".join(args[4:]) if len(args) > 4 else ""
     ref = ""
-    maps_link = generate_maps_link(lugar)
+    maps_link = generate_maps_link(tipo_match, lugar)
     voucher_link = ""
     
     # Separar referencias y links si existen
