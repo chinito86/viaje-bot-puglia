@@ -57,7 +57,7 @@ def add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [fecha, persona, categoria, monto, moneda, descripcion, "", timestamp]
         gastos.append_row(row)
-        logger.info(f"Gasto: {persona} {monto} {moneda}")
+        logger.info(f"✅ Gasto: {persona} {monto} {moneda}")
         return True
     except Exception as e:
         logger.error(f"Error add_gasto: {e}")
@@ -82,7 +82,7 @@ def delete_gasto(index):
             return False
         gastos = sheet.worksheet("Gastos")
         gastos.delete_rows(index + 2)
-        logger.info(f"Gasto eliminado: fila {index + 2}")
+        logger.info(f"✅ Gasto eliminado: fila {index + 2}")
         return True
     except Exception as e:
         logger.error(f"Error delete_gasto: {e}")
@@ -92,14 +92,13 @@ def get_gastos_summary():
     try:
         sheet = init_sheets()
         if not sheet:
-            logger.error("No se pudo conectar a Sheets")
             return {}
         gastos = sheet.worksheet("Gastos")
         data = gastos.get_all_records()
         
         resumen = {p: 0 for p in PEOPLE}
         
-        for i, row in enumerate(data):
+        for row in data:
             row_clean = {k.strip(): v for k, v in row.items()}
             persona_raw = row_clean.get("Persona", "").strip()
             monto_str = row_clean.get("Monto", "0")
@@ -115,7 +114,7 @@ def get_gastos_summary():
                     monto = float(str(monto_str).strip() or 0)
                     resumen[persona_match] += monto
                 except Exception as e:
-                    logger.error(f"Error parsing monto '{monto_str}': {e}")
+                    logger.error(f"Error parsing monto: {e}")
         
         return resumen
     except Exception as e:
@@ -124,18 +123,13 @@ def get_gastos_summary():
 
 # ===== EVENTOS =====
 def parse_fecha(fecha_str, year=2026):
-    """Parsea fechas en múltiples formatos: 23-07, 23/07, 23.07, 2026-07-23, etc"""
+    """Parsea fechas flexibles: 23-07, 23/07, 23.07, 2026-07-23"""
     try:
-        # Intentar formatos comunes
-        formatos = [
-            "%d-%m-%Y", "%d-%m", "%d/%m/%Y", "%d/%m", "%d.%m.%Y", "%d.%m",
-            "%Y-%m-%d"
-        ]
-        
+        formatos = ["%d-%m-%Y", "%d-%m", "%d/%m/%Y", "%d/%m", "%d.%m.%Y", "%d.%m", "%Y-%m-%d"]
         for fmt in formatos:
             try:
                 dt = datetime.strptime(fecha_str, fmt)
-                if dt.year == 1900:  # Sin año
+                if dt.year == 1900:
                     dt = dt.replace(year=year)
                 return dt.date()
             except:
@@ -145,7 +139,7 @@ def parse_fecha(fecha_str, year=2026):
         logger.error(f"Error parse_fecha: {e}")
         return None
 
-def add_evento(fecha, hora, tipo, descripcion, checkin="", checkout="", maps_link="", voucher_link=""):
+def add_evento(fecha, hora, tipo, lugar, descripcion="", ref="", maps_link="", voucher_link=""):
     try:
         sheet = init_sheets()
         if not sheet:
@@ -155,17 +149,17 @@ def add_evento(fecha, hora, tipo, descripcion, checkin="", checkout="", maps_lin
         row = [
             f"{fecha} {hora}",
             tipo,
-            descripcion,
+            f"{lugar} {descripcion}".strip(),
+            ref,
             "",
-            checkin,
-            checkout,
+            "",
             maps_link,
             voucher_link,
             "2h",
             timestamp
         ]
         eventos.append_row(row)
-        logger.info(f"Evento agregado: {tipo} {descripcion}")
+        logger.info(f"✅ Evento: {tipo} {lugar}")
         return True
     except Exception as e:
         logger.error(f"Error add_evento: {e}")
@@ -184,7 +178,6 @@ def get_eventos_list():
         return []
 
 def get_eventos_by_date(fecha):
-    """Obtiene eventos para una fecha específica"""
     try:
         eventos = get_eventos_list()
         resultado = []
@@ -209,7 +202,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     username = update.message.from_user.username
-    
     persona_auto = USERNAME_MAP.get(username.lower()) if username else None
     
     pattern = r'/gasto\s+(.+)'
@@ -217,46 +209,47 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not match:
         if persona_auto:
-            await update.message.reply_text(f"👤 Persona detectada: {persona_auto}\n\n💬 Formato: /gasto 25 EUR comida - descripcion")
+            await update.message.reply_text(f"👤 Detectado: {persona_auto}\n💬 Formato: /gasto 25 EUR comida - descripcion")
         else:
-            await update.message.reply_text("💬 Formato: /gasto 25 EUR comida chinito - descripcion")
+            await update.message.reply_text("💬 Formato: /gasto 25 EUR comida persona - descripcion")
         return
     
     args_text = match.group(1)
     parts = args_text.split()
     
     if len(parts) < 3:
-        await update.message.reply_text("💬 Formato: /gasto 25 EUR comida [persona] - descripcion")
+        await update.message.reply_text("💬 Mínimo: /gasto MONTO MONEDA CATEGORIA")
         return
     
     monto = parts[0]
     moneda = parts[1]
     categoria = parts[2]
+    descripcion = " ".join(parts[3:]) if len(parts) > 3 else ""
     
-    if len(parts) >= 4 and parts[3].lower() in [p.lower() for p in PEOPLE]:
-        persona = parts[3]
-        descripcion = " ".join(parts[4:]) if len(parts) > 4 else ""
-    elif persona_auto:
-        persona = persona_auto
-        descripcion = " ".join(parts[3:]) if len(parts) > 3 else ""
-    else:
-        await update.message.reply_text("⚠️ Persona no especificada y no detectada por username")
+    # Extraer persona si está en descripción
+    persona_match = None
+    for p in PEOPLE:
+        if p.lower() in descripcion.lower():
+            persona_match = p
+            break
+    
+    if not persona_match and persona_auto:
+        persona_match = persona_auto
+    
+    if not persona_match:
+        await update.message.reply_text(f"⚠️ Persona no detectada. Menciona: {', '.join(PEOPLE)}")
+        return
+    
+    if categoria.lower() not in [c.lower() for c in CATEGORIES]:
+        await update.message.reply_text(f"⚠️ Categoría inválida: {', '.join(CATEGORIES)}")
         return
     
     if descripcion.startswith("-"):
         descripcion = descripcion[1:].strip()
     
-    if persona.lower() not in [p.lower() for p in PEOPLE]:
-        await update.message.reply_text(f"⚠️ Persona invalida. Usa: {', '.join(PEOPLE)}")
-        return
-    
-    if categoria.lower() not in [c.lower() for c in CATEGORIES]:
-        await update.message.reply_text(f"⚠️ Categoria invalida. Usa: {', '.join(CATEGORIES)}")
-        return
-    
     fecha = datetime.now().strftime("%Y-%m-%d")
-    if add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
-        msg = f"✅ Gasto registrado:\n👤 {persona}\n💵 {monto} {moneda}\n🏷️ {categoria}"
+    if add_gasto(fecha, persona_match, categoria, monto, moneda, descripcion):
+        msg = f"✅ Gasto registrado:\n👤 {persona_match}\n💵 {monto} {moneda}\n🏷️ {categoria}"
         await update.message.reply_text(msg)
     else:
         await update.message.reply_text("❌ Error al guardar")
@@ -275,21 +268,19 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "/borrar":
         gastos = get_gastos_list()
         if not gastos:
-            await update.message.reply_text("📭 No hay gastos para borrar")
+            await update.message.reply_text("📭 Sin gastos")
             return
         
         ultimos = gastos[-5:] if len(gastos) > 5 else gastos
         msg = "🗑️ Últimos gastos:\n\n"
         for i, gasto in enumerate(ultimos):
-            idx = len(gastos) - len(ultimos) + i
             fecha = gasto.get("Fecha", "")
             persona = gasto.get("Persona", "")
-            categoria = gasto.get("Categoría", "")
             monto = gasto.get("Monto", "")
             moneda = gasto.get("Moneda ", "")
-            msg += f"{i}: 📅 {fecha} - 👤 {persona} - 💵 {monto} {moneda} - 🏷️ {categoria}\n"
+            msg += f"{i}: 📅 {fecha} - 👤 {persona} - 💵 {monto} {moneda}\n"
         
-        msg += "\n💬 Para borrar: /borrar 0 (o el número)"
+        msg += "\n💬 Borrar: /borrar 0"
         await update.message.reply_text(msg)
         return
     
@@ -298,53 +289,50 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             num = int(match.group(1))
             gastos = get_gastos_list()
-            
-            if num < 0 or num >= len(gastos):
-                await update.message.reply_text("⚠️ Número inválido")
-                return
-            
-            gasto = gastos[num]
-            if delete_gasto(num):
-                msg = f"✅ Gasto borrado:\n👤 {gasto.get('Persona')} - 💵 {gasto.get('Monto')} {gasto.get('Moneda ')}"
-                await update.message.reply_text(msg)
+            if 0 <= num < len(gastos):
+                gasto = gastos[num]
+                if delete_gasto(num):
+                    msg = f"✅ Borrado:\n👤 {gasto.get('Persona')} - 💵 {gasto.get('Monto')}"
+                    await update.message.reply_text(msg)
+                else:
+                    await update.message.reply_text("❌ Error")
             else:
-                await update.message.reply_text("❌ Error al borrar")
+                await update.message.reply_text("⚠️ Número inválido")
         except Exception as e:
-            logger.error(f"Error en cmd_borrar: {e}")
-            await update.message.reply_text("❌ Error al borrar")
+            logger.error(f"Error cmd_borrar: {e}")
+            await update.message.reply_text("❌ Error")
 
 async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
-    # Parsear: /evento 23-07 14:48 vuelo Roma→Bari FR8315
     pattern = r'/evento\s+(.+)'
     match = re.match(pattern, text)
     
     if not match:
-        await update.message.reply_text("💬 Formato: /evento 23-07 14:48 vuelo Roma→Bari Descripcion")
+        await update.message.reply_text("💬 Formato: /evento 23-07 14:48 vuelo Aeropuerto Descripcion [Ref] [MapLink] [VoucherLink]")
         return
     
     args = match.group(1).split()
     if len(args) < 4:
-        await update.message.reply_text("💬 Formato mínimo: /evento FECHA HORA TIPO DESCRIPCION")
+        await update.message.reply_text("💬 Mínimo: /evento FECHA HORA TIPO LUGAR")
         return
     
     fecha_str = args[0]
     hora_str = args[1]
     tipo_str = args[2].lower()
-    descripcion = " ".join(args[3:])
+    lugar = args[3]
     
     # Validar fecha
     fecha = parse_fecha(fecha_str)
     if not fecha:
-        await update.message.reply_text("⚠️ Fecha inválida. Usa: 23-07 o 2026-07-23")
+        await update.message.reply_text("⚠️ Fecha inválida: 23-07 o 2026-07-23")
         return
     
     # Validar hora
     try:
         datetime.strptime(hora_str, "%H:%M")
     except:
-        await update.message.reply_text("⚠️ Hora inválida. Usa: 14:48")
+        await update.message.reply_text("⚠️ Hora inválida: 14:48")
         return
     
     # Validar tipo
@@ -356,11 +344,30 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not tipo_match:
         tipo_match = tipo_str.capitalize()
     
-    # Generar link a Maps
-    maps_link = generate_maps_link(descripcion)
+    # Recopilar opcionales
+    descripcion = " ".join(args[4:]) if len(args) > 4 else ""
+    ref = ""
+    maps_link = generate_maps_link(lugar)
+    voucher_link = ""
     
-    if add_evento(str(fecha), hora_str, tipo_match, descripcion, maps_link=maps_link):
-        msg = f"✅ Evento agregado:\n🏷️ {tipo_match}\n📅 {fecha} {hora_str}\n📝 {descripcion}\n🗺️ [Ver en Maps]({maps_link})"
+    # Separar referencias y links si existen
+    if "http" in descripcion:
+        partes = descripcion.split("http")
+        descripcion = partes[0]
+        for i, parte in enumerate(partes[1:]):
+            url = "http" + parte
+            if "drive" in url:
+                voucher_link = url.split()[0]
+            elif "maps" in url:
+                maps_link = url.split()[0]
+    
+    if add_evento(str(fecha), hora_str, tipo_match, lugar, descripcion, ref, maps_link, voucher_link):
+        msg = f"✅ Evento agregado:\n🗓️ {tipo_match}\n📅 {fecha} {hora_str}\n📍 {lugar}"
+        if descripcion:
+            msg += f"\n📝 {descripcion}"
+        if voucher_link:
+            msg += f"\n📄 [Voucher]({voucher_link})"
+        msg += f"\n🗺️ [Maps]({maps_link})"
         await update.message.reply_text(msg)
     else:
         await update.message.reply_text("❌ Error al guardar evento")
@@ -368,18 +375,18 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eventos = get_eventos_list()
     if not eventos:
-        await update.message.reply_text("📭 No hay eventos registrados")
+        await update.message.reply_text("📭 Sin eventos")
         return
     
-    msg = "📅 CALENDARIO DE EVENTOS:\n\n"
-    for i, evento in enumerate(eventos):
+    msg = "📅 CALENDARIO:\n\n"
+    for i, evento in enumerate(eventos, 1):
         fecha_hora = evento.get("Fecha/Hora", "")
         tipo = evento.get("Tipo", "")
         desc = evento.get("Descripción", "")
         maps = evento.get("Link Google Maps", "")
         voucher = evento.get("Link Google Drive", "")
         
-        msg += f"{i+1}. {tipo.upper()} - {fecha_hora}\n"
+        msg += f"{i}. {tipo.upper()} - {fecha_hora}\n"
         msg += f"   📝 {desc}\n"
         if maps:
             msg += f"   🗺️ [Maps]({maps})\n"
@@ -391,44 +398,42 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    
-    # Parsear argumentos
     args = text.replace("/hoy", "").strip().split()
     
     if not args:
-        # Hoy por defecto
         fecha_target = datetime.now().date()
     else:
-        # Intentar parsear como fecha
         fecha_target = parse_fecha(args[0])
         if not fecha_target:
-            await update.message.reply_text("⚠️ Formato: /hoy o /hoy 25-07 o /hoy Polignano")
+            await update.message.reply_text("⚠️ Formato: /hoy o /hoy 25-07")
             return
     
     eventos = get_eventos_by_date(fecha_target)
     
-    msg = f"📅 Eventos para {fecha_target}:\n\n"
+    msg = f"📅 Eventos {fecha_target}:\n\n"
     if not eventos:
         msg += "📭 Sin eventos"
     else:
         for e in eventos:
             tipo = e.get("Tipo", "")
             desc = e.get("Descripción", "")
-            hora = e.get("Fecha/Hora", "").split()[1] if " " in e.get("Fecha/Hora", "") else ""
+            fecha_hora = e.get("Fecha/Hora", "")
+            hora = fecha_hora.split()[1] if " " in fecha_hora else ""
             msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
     # Si es después de 20hs, mostrar mañana
     if datetime.now().hour >= 20:
         manana = fecha_target + timedelta(days=1)
         eventos_manana = get_eventos_by_date(manana)
-        msg += f"\n📅 Eventos para mañana ({manana}):\n\n"
+        msg += f"\n📅 Mañana ({manana}):\n\n"
         if not eventos_manana:
             msg += "📭 Sin eventos"
         else:
             for e in eventos_manana:
                 tipo = e.get("Tipo", "")
                 desc = e.get("Descripción", "")
-                hora = e.get("Fecha/Hora", "").split()[1] if " " in e.get("Fecha/Hora", "") else ""
+                fecha_hora = e.get("Fecha/Hora", "")
+                hora = fecha_hora.split()[1] if " " in fecha_hora else ""
                 msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
     await update.message.reply_text(msg)
@@ -436,16 +441,14 @@ async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = """❓ AYUDA
 
-💰 /gasto - Registrar gasto
-Formato: /gasto 25 EUR comida - descripcion
+💰 /gasto - Flexible: /gasto 25 EUR comida descripcion
+📅 /evento - Flexible: /evento 23-07 14:48 vuelo Lugar [Desc] [Ref] [Maps] [Voucher]
+📊 /resumen - Totales por persona
+🗑️ /borrar - Eliminar: /borrar 0
+📅 /calendario - Ver todos
+🕐 /hoy - Eventos hoy
 
-📅 /evento - Agregar evento
-Formato: /evento 23-07 14:48 vuelo Roma→Bari FR8315
-
-📊 /resumen - Ver totales por persona
-🗑️ /borrar - Eliminar gasto
-📅 /calendario - Ver todos los eventos
-🕐 /hoy - Eventos de hoy"""
+✅ Todos los campos son opcionales y flexibles"""
     await update.message.reply_text(msg)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -473,7 +476,7 @@ def keep_alive():
             time.sleep(600)
             url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:10000")
             requests.get(url, timeout=5)
-            logger.info("✅ Keep-alive ping")
+            logger.info("✅ Keep-alive")
         except Exception as e:
             logger.debug(f"Keep-alive error: {e}")
 
@@ -505,9 +508,9 @@ def main():
             
             keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
             keep_alive_thread.start()
-            logger.info("🔄 Keep-alive iniciado")
+            logger.info("🔄 Keep-alive")
             
-            logger.info("🤖 Bot iniciado - intento {}/{}".format(retry_count + 1, max_retries))
+            logger.info("🤖 Bot iniciado")
             
             try:
                 app.run_polling()
@@ -517,13 +520,13 @@ def main():
                 
         except Exception as e:
             retry_count += 1
-            logger.error(f"❌ Error en bot (intento {retry_count}/{max_retries}): {e}")
+            logger.error(f"❌ Error (intento {retry_count}/{max_retries}): {e}")
             
             if retry_count < max_retries:
-                logger.info(f"⏳ Reintentando en 10 segundos...")
+                logger.info(f"⏳ Reintentando...")
                 time.sleep(10)
             else:
-                logger.error("❌ Máximo de reintentos alcanzado")
+                logger.error("❌ Máximo de reintentos")
                 raise
 
 if __name__ == "__main__":
