@@ -503,17 +503,24 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         maps = evento.get("Link Google Maps", "")
         voucher = evento.get("Link Google Drive", "")
         
-        msg += f"{i}. {tipo.upper()} - {fecha_hora}"
+        msg += f"#{i}. {tipo.upper()}\n"
+        msg += f"   📅 {fecha_hora}"
         if fecha_retorno:
             msg += f" → {fecha_retorno}"
         msg += "\n"
         msg += f"   📝 {desc}\n"
+        
         if maps:
             msg += f"   🗺️ [Maps]({maps})\n"
+        
         if voucher:
             msg += f"   📄 [Voucher]({voucher})\n"
+        else:
+            msg += f"   ⚠️ Sin voucher\n"
+        
         msg += "\n"
     
+    msg += "💬 /voucher-consultar para ver todos los vouchers"
     await update.message.reply_text(msg)
 
 async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -571,7 +578,66 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error cmd_voucher: {e}")
         await update.message.reply_text("❌ Error")
 
-async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    
+    if text == "/voucher-consultar":
+        eventos = get_eventos_list()
+        if not eventos:
+            await update.message.reply_text("📭 Sin eventos")
+            return
+        
+        msg = "📄 VOUCHERS:\n\n"
+        tiene_vouchers = False
+        for i, evento in enumerate(eventos, 1):
+            voucher = evento.get("Link Google Drive", "")
+            if voucher:
+                tipo = evento.get("Tipo", "")
+                desc = evento.get("Descripción", "")
+                msg += f"#{i}: {tipo} - {desc}\n📄 [Ver Voucher]({voucher})\n\n"
+                tiene_vouchers = True
+        
+        if not tiene_vouchers:
+            msg = "📭 Sin vouchers registrados"
+        
+        msg += "💬 Para consultar un evento específico:\n/voucher-consultar 8"
+        await update.message.reply_text(msg)
+        return
+    
+    # Parsear: /voucher-consultar 8
+    pattern = r'/voucher-consultar\s+(\d+)'
+    match = re.match(pattern, text)
+    
+    if not match:
+        await update.message.reply_text('💬 Formato: /voucher-consultar 8')
+        return
+    
+    try:
+        num_evento = int(match.group(1))
+        eventos = get_eventos_list()
+        idx = num_evento - 1
+        
+        if idx < 0 or idx >= len(eventos):
+            await update.message.reply_text(f"⚠️ Evento #{num_evento} no existe")
+            return
+        
+        evento = eventos[idx]
+        voucher = evento.get("Link Google Drive", "")
+        
+        if not voucher:
+            await update.message.reply_text(f"⚠️ Evento #{num_evento} sin voucher")
+            return
+        
+        tipo = evento.get("Tipo", "")
+        desc = evento.get("Descripción", "")
+        fecha_hora = evento.get("Fecha/Hora", "")
+        
+        msg = f"📄 Voucher Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📅 {fecha_hora}\n\n[Abrir Voucher]({voucher})"
+        await update.message.reply_text(msg)
+        
+    except Exception as e:
+        logger.error(f"Error cmd_voucher_consultar: {e}")
+        await update.message.reply_text("❌ Error")
     text = update.message.text.strip()
     args = text.replace("/hoy", "").strip().split()
     
@@ -691,6 +757,7 @@ def main():
             app.add_handler(CommandHandler("calendario", cmd_calendario))
             app.add_handler(CommandHandler("hoy", cmd_hoy))
             app.add_handler(CommandHandler("voucher", cmd_voucher))
+            app.add_handler(CommandHandler("voucher-consultar", cmd_voucher_consultar))
             app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
             app.add_handler(MessageHandler(filters.Regex(r"^/borrar"), cmd_borrar))
