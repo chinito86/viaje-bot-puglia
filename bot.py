@@ -143,10 +143,20 @@ def parse_fecha(fecha_str, year=2026):
 
 def add_evento(fecha, hora, tipo, lugar, maps_link="", voucher_link=""):
     try:
+        logger.info(f"🔍 Intentando agregar evento: {tipo} {lugar}")
         sheet = init_sheets()
         if not sheet:
+            logger.error("❌ init_sheets retornó None")
             return False
-        eventos = sheet.worksheet("Eventos")
+        logger.info(f"✅ Sheet conectado")
+        
+        try:
+            eventos = sheet.worksheet("Eventos")
+            logger.info(f"✅ Pestaña 'Eventos' encontrada")
+        except Exception as e:
+            logger.error(f"❌ Pestaña 'Eventos' no existe: {e}")
+            return False
+        
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [
             f"{fecha} {hora}",
@@ -160,11 +170,14 @@ def add_evento(fecha, hora, tipo, lugar, maps_link="", voucher_link=""):
             "2h",
             timestamp
         ]
+        logger.info(f"📝 Intentando agregar fila: {row}")
         eventos.append_row(row)
         logger.info(f"✅ Evento: {tipo} {lugar}")
         return True
     except Exception as e:
-        logger.error(f"Error add_evento: {e}")
+        logger.error(f"❌ Error add_evento: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 def get_eventos_list():
