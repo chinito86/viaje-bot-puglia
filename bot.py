@@ -5,8 +5,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import re
@@ -36,6 +36,9 @@ USERNAME_MAP = {
     "chinitocava": "Chinito",
     "pablodmmm": "Pablito"
 }
+
+# Almacenamiento temporal de gastos pendientes
+gastos_pendientes = {}
 
 def init_sheets():
     try:
@@ -123,7 +126,6 @@ def get_gastos_summary():
 
 # ===== EVENTOS =====
 def parse_fecha(fecha_str, year=2026):
-    """Parsea fechas flexibles: 23-07, 23/07, 23.07, 2026-07-23"""
     try:
         formatos = ["%d-%m-%Y", "%d-%m", "%d/%m/%Y", "%d/%m", "%d.%m.%Y", "%d.%m", "%Y-%m-%d"]
         for fmt in formatos:
@@ -139,7 +141,7 @@ def parse_fecha(fecha_str, year=2026):
         logger.error(f"Error parse_fecha: {e}")
         return None
 
-def add_evento(fecha, hora, tipo, lugar, descripcion="", ref="", maps_link="", voucher_link=""):
+def add_evento(fecha, hora, tipo, lugar, maps_link="", voucher_link=""):
     try:
         sheet = init_sheets()
         if not sheet:
@@ -149,8 +151,8 @@ def add_evento(fecha, hora, tipo, lugar, descripcion="", ref="", maps_link="", v
         row = [
             f"{fecha} {hora}",
             tipo,
-            f"{lugar} {descripcion}".strip(),
-            ref,
+            lugar,
+            "",
             "",
             "",
             maps_link,
@@ -191,10 +193,8 @@ def get_eventos_by_date(fecha):
         return []
 
 def generate_maps_link(tipo, lugar):
-    """Genera link a Google Maps más específico según tipo de evento"""
     tipo_lower = tipo.lower()
     
-    # Agregar contexto según tipo
     if "hospedaje" in tipo_lower or "hotel" in tipo_lower:
         busqueda = f"Hotel {lugar}"
     elif "vuelo" in tipo_lower or "aeropuerto" in tipo_lower:
@@ -218,6 +218,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     username = update.message.from_user.username
+    user_id = update.message.from_user.id
     persona_auto = USERNAME_MAP.get(username.lower()) if username else None
     
     pattern = r'/gasto\s+(.+)'
@@ -225,50 +226,98 @@ async def process_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not match:
         if persona_auto:
-            await update.message.reply_text(f"👤 Detectado: {persona_auto}\n💬 Formato: /gasto 25 EUR comida - descripcion")
+            await update.message.reply_text(f"👤 Detectado: {persona_auto}\n💬 Formato: /gasto 25EUR comida - descripcion")
         else:
-            await update.message.reply_text("💬 Formato: /gasto 25 EUR comida persona - descripcion")
+            await update.message.reply_text("💬 Formato: /gasto 25EUR comida - descripcion")
         return
     
     args_text = match.group(1)
-    parts = args_text.split()
     
-    if len(parts) < 3:
-        await update.message.reply_text("💬 Mínimo: /gasto MONTO MONEDA CATEGORIA")
+    # Parsear monto y moneda flexibles (50eur o 50 eur)
+    monto_match = re.match(r'([\d.]+)\s*([a-zA-Z]+)', args_text)
+    if not monto_match:
+        await update.message.reply_text("💬 Formato: /gasto 25EUR comida descripcion")
         return
     
-    monto = parts[0]
-    moneda = parts[1]
-    categoria = parts[2]
-    descripcion = " ".join(parts[3:]) if len(parts) > 3 else ""
+    monto = monto_match.group(1)
+    moneda = monto_match.group(2).upper()
+    resto = args_text[monto_match.end():].strip()
     
-    # Extraer persona si está en descripción
+    # Buscar categoría en TODO el texto
+    categoria_encontrada = None
+    for cat in CATEGORIES:
+        if cat.lower() in resto.lower():
+            categoria_encontrada = cat
+            break
+    
+    if not categoria_encontrada:
+        await update.message.reply_text(f"⚠️ Categoría no encontrada. Usa: {', '.join(CATEGORIES)}")
+        return
+    
+    # Limpiar descripción
+    descripcion = resto.replace(categoria_encontrada, "").replace(categoria_encontrada.lower(), "").strip()
+    if descripcion.startswith("-"):
+        descripcion = descripcion[1:].strip()
+    
+    # Extraer persona
     persona_match = None
     for p in PEOPLE:
-        if p.lower() in descripcion.lower():
+        if p.lower() in resto.lower():
             persona_match = p
             break
     
     if not persona_match and persona_auto:
         persona_match = persona_auto
     
+    # Si no hay persona, mostrar botones
     if not persona_match:
-        await update.message.reply_text(f"⚠️ Persona no detectada. Menciona: {', '.join(PEOPLE)}")
+        keyboard = [
+            [InlineKeyboardButton(p, callback_data=f"gasto_{user_id}_{p}_{monto}_{moneda}_{categoria_encontrada}_{descripcion}") for p in PEOPLE]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("👤 ¿Quién es?", reply_markup=reply_markup)
         return
-    
-    if categoria.lower() not in [c.lower() for c in CATEGORIES]:
-        await update.message.reply_text(f"⚠️ Categoría inválida: {', '.join(CATEGORIES)}")
-        return
-    
-    if descripcion.startswith("-"):
-        descripcion = descripcion[1:].strip()
     
     fecha = datetime.now().strftime("%Y-%m-%d")
-    if add_gasto(fecha, persona_match, categoria, monto, moneda, descripcion):
-        msg = f"✅ Gasto registrado:\n👤 {persona_match}\n💵 {monto} {moneda}\n🏷️ {categoria}"
+    if add_gasto(fecha, persona_match, categoria_encontrada, monto, moneda, descripcion):
+        emoji_cat = get_emoji_categoria(categoria_encontrada)
+        msg = f"✅ Gasto registrado:\n👤 {persona_match}\n💵 {monto} {moneda}\n{emoji_cat} {categoria_encontrada}"
+        if descripcion:
+            msg += f"\n📝 {descripcion}"
         await update.message.reply_text(msg)
     else:
         await update.message.reply_text("❌ Error al guardar")
+
+def get_emoji_categoria(categoria):
+    """Retorna emoji según categoría"""
+    emojis = {
+        "Alojamiento": "🏨",
+        "Comida": "🍽️",
+        "Transporte": "🚗",
+        "Drinks": "🍺",
+        "Actividades": "🎭",
+        "Misc": "📦"
+    }
+    return emojis.get(categoria, "🏷️")
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data.split("_", 5)
+    if data[0] == "gasto":
+        persona = data[2]
+        monto = data[3]
+        moneda = data[4]
+        categoria = data[5]
+        descripcion = data[6] if len(data) > 6 else ""
+        
+        fecha = datetime.now().strftime("%Y-%m-%d")
+        if add_gasto(fecha, persona, categoria, monto, moneda, descripcion):
+            msg = f"✅ Gasto registrado:\n👤 {persona}\n💵 {monto} {moneda}\n🏷️ {categoria}"
+            await query.edit_message_text(text=msg)
+        else:
+            await query.edit_message_text(text="❌ Error al guardar")
 
 async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = get_gastos_summary()
@@ -339,18 +388,14 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hora_str = partes[1]
     tipo_str = partes[2].lower()
     
-    # Buscar lugar entre comillas
     lugar_match = re.search(r'"([^"]+)"', resto)
     if lugar_match:
         lugar = lugar_match.group(1)
-        # Remover el lugar con comillas del texto para buscar links
         todo_lo_demás = resto.replace(f'"{lugar}"', "").strip()
     else:
-        # Si no hay comillas, tomar el próximo argumento
         lugar = partes[3]
         todo_lo_demás = " ".join(partes[4:])
     
-    # Buscar URLs
     maps_link = ""
     voucher_link = ""
     urls = re.findall(r'https?://\S+', todo_lo_demás)
@@ -360,20 +405,17 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif "maps" in url:
             maps_link = url
     
-    # Validar fecha
     fecha = parse_fecha(fecha_str)
     if not fecha:
         await update.message.reply_text("⚠️ Fecha inválida: 23-07 o 2026-07-23")
         return
     
-    # Validar hora
     try:
         datetime.strptime(hora_str, "%H:%M")
     except:
         await update.message.reply_text("⚠️ Hora inválida: 14:48")
         return
     
-    # Validar tipo
     tipo_match = None
     for t in EVENT_TYPES:
         if t.lower() == tipo_str:
@@ -382,7 +424,6 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not tipo_match:
         tipo_match = tipo_str.capitalize()
     
-    # Generar Maps link si no existe
     if not maps_link:
         maps_link = generate_maps_link(tipo_match, lugar)
     
@@ -443,7 +484,6 @@ async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             hora = fecha_hora.split()[1] if " " in fecha_hora else ""
             msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
-    # Si es después de 20hs, mostrar mañana
     if datetime.now().hour >= 20:
         manana = fecha_target + timedelta(days=1)
         eventos_manana = get_eventos_by_date(manana)
@@ -465,6 +505,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💰 /gasto - Registrar gasto
    Formato: /gasto 25 EUR comida descripcion
+   ✅ Auto-detecta persona por username
+   ✅ Si no tiene username, muestra botones para elegir
    Ejemplo: /gasto 45 EUR transporte Uber desde hotel
    
 📅 /evento - Agregar evento
@@ -473,28 +515,22 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
    Tipos: Vuelo, Tren, Rent a Car, Hospedaje, Excursion, Comida, Reserva
    
 📊 /resumen - Ver totales por persona
-   Ejemplo: /resumen
    
 🗑️ /borrar - Eliminar gasto
    Paso 1: /borrar (muestra últimos 5)
    Paso 2: /borrar 0 (borra el primero)
    
 📅 /calendario - Ver todos los eventos
-   Ejemplo: /calendario
    
 🕐 /hoy - Eventos del día
-   Ejemplo: /hoy (hoy)
-   Ejemplo: /hoy 25-07 (fecha específica)
+   Opción 1: /hoy (hoy)
+   Opción 2: /hoy 25-07 (fecha específica)
    Si es después de 20hs muestra hoy + mañana
 
-✅ **Todos los campos son flexibles:**
-   - Si no pones número de vuelo, se agrega igual
-   - Si no pones descripción, se agrega igual
-   - Puedes pasar links de Maps/Drive directamente
-
-📝 **Lugares:**
-   Entre comillas: /evento 23-07 14:48 vuelo "Aeropuerto Fiumicino"
-   Auto-genera link a Maps según el tipo de evento"""
+✅ **Lógica de persona en /gasto:**
+   1️⃣ Si tienes username registrado → Auto-detecta
+   2️⃣ Si escribes el nombre → Lo usa
+   3️⃣ Si no tienes username Y no escribes nombre → Muestra botones para elegir"""
     await update.message.reply_text(msg)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -542,6 +578,7 @@ def main():
             app.add_handler(CommandHandler("evento", cmd_evento))
             app.add_handler(CommandHandler("calendario", cmd_calendario))
             app.add_handler(CommandHandler("hoy", cmd_hoy))
+            app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
             app.add_handler(MessageHandler(filters.Regex(r"^/borrar"), cmd_borrar))
             app.add_error_handler(error_handler)
