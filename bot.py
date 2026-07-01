@@ -141,7 +141,7 @@ def parse_fecha(fecha_str, year=2026):
         logger.error(f"Error parse_fecha: {e}")
         return None
 
-def add_evento(fecha, hora, tipo, lugar, maps_link="", voucher_link=""):
+def add_evento(fecha, hora, tipo, lugar, maps_link="", voucher_link="", fecha_retorno=""):
     try:
         logger.info(f"🔍 Intentando agregar evento: {tipo} {lugar}")
         sheet = init_sheets()
@@ -164,7 +164,7 @@ def add_evento(fecha, hora, tipo, lugar, maps_link="", voucher_link=""):
             lugar,
             "",
             "",
-            "",
+            fecha_retorno,  # Columna F: Fecha/Hora Retorno
             maps_link,
             voucher_link,
             "2h",
@@ -431,7 +431,7 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         match = re.match(pattern, text)
         
         if not match:
-            await update.message.reply_text('💬 Formato: /evento 23-07 14:48 vuelo "Lugar"')
+            await update.message.reply_text('💬 Formato: /evento 23-07 14:48 vuelo "Lugar" ["Retorno"]')
             return
         
         resto = match.group(1)
@@ -445,11 +445,15 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hora_str = partes[1]
         tipo_str = partes[2].lower()
         
-        lugar_match = re.search(r'"([^"]+)"', resto)
-        if lugar_match:
-            lugar = lugar_match.group(1)
-        else:
-            lugar = partes[3]
+        # Buscar lugares y retorno entre comillas
+        lugares_match = re.findall(r'"([^"]+)"', resto)
+        
+        if not lugares_match:
+            await update.message.reply_text('💬 El lugar debe ir entre comillas: "Hotel Torres"')
+            return
+        
+        lugar = lugares_match[0]
+        fecha_retorno = lugares_match[1] if len(lugares_match) > 1 else ""
         
         fecha = parse_fecha(fecha_str)
         if not fecha:
@@ -459,8 +463,18 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tipo_match = tipo_str.capitalize()
         maps_link = generate_maps_link(tipo_match, lugar)
         
-        if add_evento(str(fecha), hora_str, tipo_match, lugar, maps_link=maps_link):
-            msg = f"✅ Evento:\n🗓️ {tipo_match}\n📅 {fecha} {hora_str}\n📍 {lugar}"
+        # Parsear voucher link si existe
+        voucher_link = ""
+        urls = re.findall(r'https?://[^\s"]+', resto)
+        for url in urls:
+            if "drive" in url:
+                voucher_link = url
+        
+        if add_evento(str(fecha), hora_str, tipo_match, lugar, maps_link=maps_link, voucher_link=voucher_link, fecha_retorno=fecha_retorno):
+            msg = f"✅ Evento:\n🗓️ {tipo_match}\n📅 Entrada: {fecha} {hora_str}"
+            if fecha_retorno:
+                msg += f"\n📅 Salida: {fecha_retorno}"
+            msg += f"\n📍 {lugar}"
             await update.message.reply_text(msg)
         else:
             await update.message.reply_text("❌ Error al guardar")
@@ -482,10 +496,14 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fecha_hora = evento.get("Fecha/Hora", "")
         tipo = evento.get("Tipo", "")
         desc = evento.get("Descripción", "")
+        fecha_retorno = evento.get("Fecha/Hora Retorno", "")
         maps = evento.get("Link Google Maps", "")
         voucher = evento.get("Link Google Drive", "")
         
-        msg += f"{i}. {tipo.upper()} - {fecha_hora}\n"
+        msg += f"{i}. {tipo.upper()} - {fecha_hora}"
+        if fecha_retorno:
+            msg += f" → {fecha_retorno}"
+        msg += "\n"
         msg += f"   📝 {desc}\n"
         if maps:
             msg += f"   🗺️ [Maps]({maps})\n"
