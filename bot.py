@@ -477,7 +477,7 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg += f"\n📅 Salida: {fecha_retorno}"
             msg += f"\n📍 {lugar}"
             if not voucher_link:
-                msg += f"\n\n👇 Para agregar voucher:\n/voucher {num_evento - 1} https://drive.google.com/... \"Nombre\""
+                msg += f"\n\n👇 Para agregar voucher:\n/voucher {num_evento} https://drive.google.com/... \"Nombre\""
             await update.message.reply_text(msg)
         else:
             await update.message.reply_text("❌ Error al guardar")
