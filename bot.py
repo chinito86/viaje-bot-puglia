@@ -192,7 +192,27 @@ def get_eventos_by_date(fecha):
         logger.error(f"Error get_eventos_by_date: {e}")
         return []
 
-def generate_maps_link(tipo, lugar):
+def update_evento_voucher(index, voucher_link):
+    """Actualiza el link de voucher de un evento"""
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return False
+        eventos = sheet.worksheet("Eventos")
+        data = eventos.get_all_records()
+        
+        if index < 0 or index >= len(data):
+            return False
+        
+        # Actualizar la fila (index + 2 porque fila 1 es header)
+        row_number = index + 2
+        # Columna H es "Link Google Drive" (8)
+        eventos.update_cell(row_number, 8, voucher_link)
+        logger.info(f"✅ Voucher actualizado: evento {index}")
+        return True
+    except Exception as e:
+        logger.error(f"Error update_evento_voucher: {e}")
+        return False
     tipo_lower = tipo.lower()
     
     if "hospedaje" in tipo_lower or "hotel" in tipo_lower:
@@ -459,7 +479,58 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(msg)
 
-async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    
+    if text == "/voucher":
+        eventos = get_eventos_list()
+        if not eventos:
+            await update.message.reply_text("📭 Sin eventos")
+            return
+        
+        # Mostrar últimos 5 eventos
+        ultimos = eventos[-5:] if len(eventos) > 5 else eventos
+        msg = "📄 VOUCHERS - Últimos eventos:\n\n"
+        for i, evento in enumerate(ultimos):
+            idx = len(eventos) - len(ultimos) + i
+            fecha_hora = evento.get("Fecha/Hora", "")
+            tipo = evento.get("Tipo", "")
+            desc = evento.get("Descripción", "")
+            msg += f"{i}: {tipo} - {fecha_hora}\n   {desc}\n"
+        
+        msg += "\n💬 Para agregar voucher:\n/voucher 0 https://drive.google.com/... \"Nombre\""
+        await update.message.reply_text(msg)
+        return
+    
+    # Parsear: /voucher 0 https://link... "nombre"
+    pattern = r'/voucher\s+(\d+)\s+(https://[^\s]+)(?:\s+"([^"]*)")?'
+    match = re.match(pattern, text)
+    
+    if not match:
+        await update.message.reply_text('💬 Formato: /voucher 0 https://drive.google.com/... "Nombre"')
+        return
+    
+    try:
+        num = int(match.group(1))
+        voucher_link = match.group(2)
+        nombre = match.group(3) or "Voucher"
+        
+        eventos = get_eventos_list()
+        if num < 0 or num >= len(eventos):
+            await update.message.reply_text("⚠️ Número inválido")
+            return
+        
+        if update_evento_voucher(num, voucher_link):
+            evento = eventos[num]
+            tipo = evento.get("Tipo", "")
+            desc = evento.get("Descripción", "")
+            msg = f"✅ Voucher agregado:\n🗓️ {tipo}\n📝 {desc}\n📄 [{nombre}]({voucher_link})"
+            await update.message.reply_text(msg)
+        else:
+            await update.message.reply_text("❌ Error al agregar voucher")
+    except Exception as e:
+        logger.error(f"Error cmd_voucher: {e}")
+        await update.message.reply_text("❌ Error")
     text = update.message.text.strip()
     args = text.replace("/hoy", "").strip().split()
     
@@ -578,6 +649,7 @@ def main():
             app.add_handler(CommandHandler("evento", cmd_evento))
             app.add_handler(CommandHandler("calendario", cmd_calendario))
             app.add_handler(CommandHandler("hoy", cmd_hoy))
+            app.add_handler(CommandHandler("voucher", cmd_voucher))
             app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
             app.add_handler(MessageHandler(filters.Regex(r"^/borrar"), cmd_borrar))
