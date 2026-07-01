@@ -531,6 +531,8 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error cmd_voucher: {e}")
         await update.message.reply_text("❌ Error")
+
+async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     args = text.replace("/hoy", "").strip().split()
     
