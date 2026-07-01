@@ -520,7 +520,7 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         msg += "\n"
     
-    msg += "💬 /voucher-consultar para ver todos los vouchers"
+    msg += "💬 /voucherconsultar para ver todos los vouchers"
     await update.message.reply_text(msg)
 
 async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -622,7 +622,7 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
-    if text == "/voucher-consultar":
+    if text == "/voucherconsultar":
         eventos = get_eventos_list()
         if not eventos:
             await update.message.reply_text("📭 Sin eventos")
@@ -641,16 +641,16 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
         if not tiene_vouchers:
             msg = "📭 Sin vouchers registrados"
         
-        msg += "💬 Para consultar un evento específico:\n/voucher-consultar 8"
+        msg += "💬 Para consultar un evento específico:\n/voucherconsultar 8"
         await update.message.reply_text(msg)
         return
     
-    # Parsear: /voucher-consultar 8
-    pattern = r'/voucher-consultar\s+(\d+)'
+    # Parsear: /voucherconsultar 8
+    pattern = r'/voucherconsultar\s+(\d+)'
     match = re.match(pattern, text)
     
     if not match:
-        await update.message.reply_text('💬 Formato: /voucher-consultar 8')
+        await update.message.reply_text('💬 Formato: /voucherconsultar 8')
         return
     
     try:
@@ -798,7 +798,7 @@ def main():
             app.add_handler(CommandHandler("calendario", cmd_calendario))
             app.add_handler(CommandHandler("hoy", cmd_hoy))
             app.add_handler(CommandHandler("voucher", cmd_voucher))
-            app.add_handler(CommandHandler("voucher-consultar", cmd_voucher_consultar))
+            app.add_handler(CommandHandler("voucherconsultar", cmd_voucher_consultar))
             app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
             app.add_handler(MessageHandler(filters.Regex(r"^/borrar"), cmd_borrar))
