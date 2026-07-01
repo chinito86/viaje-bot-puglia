@@ -424,9 +424,6 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text.strip()
         logger.info(f"📍 /evento recibido: {text}")
         
-        # Test simple
-        await update.message.reply_text("🔍 Procesando /evento...")
-        
         pattern = r'/evento\s+(.+)'
         match = re.match(pattern, text)
         
@@ -470,11 +467,17 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "drive" in url:
                 voucher_link = url
         
+        # Contar eventos antes de agregar
+        eventos_antes = len(get_eventos_list())
+        
         if add_evento(str(fecha), hora_str, tipo_match, lugar, maps_link=maps_link, voucher_link=voucher_link, fecha_retorno=fecha_retorno):
-            msg = f"✅ Evento:\n🗓️ {tipo_match}\n📅 Entrada: {fecha} {hora_str}"
+            num_evento = eventos_antes + 1  # El nuevo evento es el siguiente número
+            msg = f"✅ Evento #{num_evento}:\n🗓️ {tipo_match}\n📅 Entrada: {fecha} {hora_str}"
             if fecha_retorno:
                 msg += f"\n📅 Salida: {fecha_retorno}"
             msg += f"\n📍 {lugar}"
+            if not voucher_link:
+                msg += f"\n\n👇 Para agregar voucher:\n/voucher {num_evento - 1} https://drive.google.com/... \"Nombre\""
             await update.message.reply_text(msg)
         else:
             await update.message.reply_text("❌ Error al guardar")
