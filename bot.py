@@ -338,6 +338,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     data = query.data.split("_", 5)
+    
     if data[0] == "gasto":
         persona = data[2]
         monto = data[3]
@@ -351,6 +352,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text=msg)
         else:
             await query.edit_message_text(text="❌ Error al guardar")
+    
+    elif data[0] == "voucher" and data[1] == "ver":
+        num_evento = int(data[2])
+        eventos = get_eventos_list()
+        idx = num_evento - 1
+        
+        if idx < 0 or idx >= len(eventos):
+            await query.edit_message_text(text=f"⚠️ Evento #{num_evento} no existe")
+            return
+        
+        evento = eventos[idx]
+        voucher = evento.get("Link Google Drive", "")
+        
+        if not voucher:
+            await query.edit_message_text(text=f"⚠️ Evento #{num_evento} sin voucher")
+            return
+        
+        tipo = evento.get("Tipo", "")
+        desc = evento.get("Descripción", "")
+        fecha_hora = evento.get("Fecha/Hora", "")
+        
+        msg = f"📄 Voucher Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📅 {fecha_hora}\n\n[Abrir Voucher]({voucher})"
+        await query.edit_message_text(text=msg)
 
 async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = get_gastos_summary()
@@ -622,27 +646,40 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
+    eventos = get_eventos_list()
+    if not eventos:
+        await update.message.reply_text("📭 Sin eventos")
+        return
+    
     if text == "/voucherconsultar":
-        eventos = get_eventos_list()
-        if not eventos:
-            await update.message.reply_text("📭 Sin eventos")
+        # Mostrar botones para eventos con voucher
+        eventos_con_voucher = []
+        for i, e in enumerate(eventos, 1):
+            if e.get("Link Google Drive", ""):
+                eventos_con_voucher.append((i, e))
+        
+        if not eventos_con_voucher:
+            await update.message.reply_text("📭 Sin vouchers registrados")
             return
         
-        msg = "📄 VOUCHERS:\n\n"
-        tiene_vouchers = False
-        for i, evento in enumerate(eventos, 1):
-            voucher = evento.get("Link Google Drive", "")
-            if voucher:
-                tipo = evento.get("Tipo", "")
-                desc = evento.get("Descripción", "")
-                msg += f"#{i}: {tipo} - {desc}\n📄 [Ver Voucher]({voucher})\n\n"
-                tiene_vouchers = True
+        # Crear botones (máximo 3 por fila)
+        keyboard = []
+        fila = []
+        for num, evento in eventos_con_voucher:
+            tipo = evento.get("Tipo", "")
+            desc = evento.get("Descripción", "")[:20]  # Primeros 20 caracteres
+            texto_btn = f"#{num} {tipo}"
+            fila.append(InlineKeyboardButton(texto_btn, callback_data=f"voucher_ver_{num}"))
+            
+            if len(fila) == 3:
+                keyboard.append(fila)
+                fila = []
         
-        if not tiene_vouchers:
-            msg = "📭 Sin vouchers registrados"
+        if fila:
+            keyboard.append(fila)
         
-        msg += "💬 Para consultar un evento específico:\n/voucherconsultar 8"
-        await update.message.reply_text(msg)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("📄 VOUCHERS:\n\nSelecciona un evento:", reply_markup=reply_markup)
         return
     
     # Parsear: /voucherconsultar 8
@@ -650,12 +687,11 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
     match = re.match(pattern, text)
     
     if not match:
-        await update.message.reply_text('💬 Formato: /voucherconsultar 8')
+        await update.message.reply_text('💬 Formato: /voucherconsultar o /voucherconsultar 8')
         return
     
     try:
         num_evento = int(match.group(1))
-        eventos = get_eventos_list()
         idx = num_evento - 1
         
         if idx < 0 or idx >= len(eventos):
