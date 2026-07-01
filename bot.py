@@ -523,6 +523,47 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg += "💬 /voucher-consultar para ver todos los vouchers"
     await update.message.reply_text(msg)
 
+async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    args = text.replace("/hoy", "").strip().split()
+    
+    if not args:
+        fecha_target = datetime.now().date()
+    else:
+        fecha_target = parse_fecha(args[0])
+        if not fecha_target:
+            await update.message.reply_text("⚠️ Formato: /hoy o /hoy 25-07")
+            return
+    
+    eventos = get_eventos_by_date(fecha_target)
+    
+    msg = f"📅 Eventos {fecha_target}:\n\n"
+    if not eventos:
+        msg += "📭 Sin eventos"
+    else:
+        for e in eventos:
+            tipo = e.get("Tipo", "")
+            desc = e.get("Descripción", "")
+            fecha_hora = e.get("Fecha/Hora", "")
+            hora = fecha_hora.split()[1] if " " in fecha_hora else ""
+            msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
+    
+    if datetime.now().hour >= 20:
+        manana = fecha_target + timedelta(days=1)
+        eventos_manana = get_eventos_by_date(manana)
+        msg += f"\n📅 Mañana ({manana}):\n\n"
+        if not eventos_manana:
+            msg += "📭 Sin eventos"
+        else:
+            for e in eventos_manana:
+                tipo = e.get("Tipo", "")
+                desc = e.get("Descripción", "")
+                fecha_hora = e.get("Fecha/Hora", "")
+                hora = fecha_hora.split()[1] if " " in fecha_hora else ""
+                msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
+    
+    await update.message.reply_text(msg)
+
 async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
