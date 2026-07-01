@@ -401,72 +401,56 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Error")
 
 async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    
-    pattern = r'/evento\s+(.+)'
-    match = re.match(pattern, text)
-    
-    if not match:
-        await update.message.reply_text('💬 Formato: /evento 23-07 14:48 vuelo "Lugar completo" [Links]')
-        return
-    
-    resto = match.group(1)
-    partes = resto.split()
-    
-    if len(partes) < 4:
-        await update.message.reply_text('💬 Mínimo: /evento FECHA HORA TIPO "LUGAR"')
-        return
-    
-    fecha_str = partes[0]
-    hora_str = partes[1]
-    tipo_str = partes[2].lower()
-    
-    lugar_match = re.search(r'"([^"]+)"', resto)
-    if lugar_match:
-        lugar = lugar_match.group(1)
-        todo_lo_demás = resto.replace(f'"{lugar}"', "").strip()
-    else:
-        lugar = partes[3]
-        todo_lo_demás = " ".join(partes[4:])
-    
-    maps_link = ""
-    voucher_link = ""
-    urls = re.findall(r'https?://\S+', todo_lo_demás)
-    for url in urls:
-        if "drive" in url:
-            voucher_link = url
-        elif "maps" in url:
-            maps_link = url
-    
-    fecha = parse_fecha(fecha_str)
-    if not fecha:
-        await update.message.reply_text("⚠️ Fecha inválida: 23-07 o 2026-07-23")
-        return
-    
     try:
-        datetime.strptime(hora_str, "%H:%M")
-    except:
-        await update.message.reply_text("⚠️ Hora inválida: 14:48")
-        return
-    
-    tipo_match = None
-    for t in EVENT_TYPES:
-        if t.lower() == tipo_str:
-            tipo_match = t
-            break
-    if not tipo_match:
+        text = update.message.text.strip()
+        logger.info(f"📍 /evento recibido: {text}")
+        
+        # Test simple
+        await update.message.reply_text("🔍 Procesando /evento...")
+        
+        pattern = r'/evento\s+(.+)'
+        match = re.match(pattern, text)
+        
+        if not match:
+            await update.message.reply_text('💬 Formato: /evento 23-07 14:48 vuelo "Lugar"')
+            return
+        
+        resto = match.group(1)
+        partes = resto.split()
+        
+        if len(partes) < 4:
+            await update.message.reply_text('💬 Mínimo: /evento FECHA HORA TIPO "LUGAR"')
+            return
+        
+        fecha_str = partes[0]
+        hora_str = partes[1]
+        tipo_str = partes[2].lower()
+        
+        lugar_match = re.search(r'"([^"]+)"', resto)
+        if lugar_match:
+            lugar = lugar_match.group(1)
+        else:
+            lugar = partes[3]
+        
+        fecha = parse_fecha(fecha_str)
+        if not fecha:
+            await update.message.reply_text("⚠️ Fecha inválida: 23-07")
+            return
+        
         tipo_match = tipo_str.capitalize()
-    
-    if not maps_link:
         maps_link = generate_maps_link(tipo_match, lugar)
-    
-    if add_evento(str(fecha), hora_str, tipo_match, lugar, maps_link=maps_link, voucher_link=voucher_link):
-        msg = f"✅ Evento agregado:\n🗓️ {tipo_match}\n📅 {fecha} {hora_str}\n📍 {lugar}\n🗺️ [Maps]({maps_link})"
-        if voucher_link:
-            msg += f"\n📄 [Voucher]({voucher_link})"
-        await update.message.reply_text(msg)
-    else:
-        await update.message.reply_text("❌ Error al guardar evento")
+        
+        if add_evento(str(fecha), hora_str, tipo_match, lugar, maps_link=maps_link):
+            msg = f"✅ Evento:\n🗓️ {tipo_match}\n📅 {fecha} {hora_str}\n📍 {lugar}"
+            await update.message.reply_text(msg)
+        else:
+            await update.message.reply_text("❌ Error al guardar")
+            
+    except Exception as e:
+        logger.error(f"❌ Error cmd_evento: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(f"❌ Error: {str(e)}")
 
 async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eventos = get_eventos_list()
