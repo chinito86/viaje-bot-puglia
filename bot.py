@@ -461,16 +461,40 @@ async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg)
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = """❓ AYUDA
+    msg = """❓ AYUDA - Bot Gastos Puglia 2026
 
-💰 /gasto - Flexible: /gasto 25 EUR comida descripcion
-📅 /evento - Flexible: /evento 23-07 14:48 vuelo Lugar [Desc] [Ref] [Maps] [Voucher]
-📊 /resumen - Totales por persona
-🗑️ /borrar - Eliminar: /borrar 0
-📅 /calendario - Ver todos
-🕐 /hoy - Eventos hoy
+💰 /gasto - Registrar gasto
+   Formato: /gasto 25 EUR comida descripcion
+   Ejemplo: /gasto 45 EUR transporte Uber desde hotel
+   
+📅 /evento - Agregar evento
+   Formato: /evento FECHA HORA TIPO "LUGAR" [Links]
+   Ejemplo: /evento 23-07 14:48 vuelo "Aeropuerto Leonardo da Vinci"
+   Tipos: Vuelo, Tren, Rent a Car, Hospedaje, Excursion, Comida, Reserva
+   
+📊 /resumen - Ver totales por persona
+   Ejemplo: /resumen
+   
+🗑️ /borrar - Eliminar gasto
+   Paso 1: /borrar (muestra últimos 5)
+   Paso 2: /borrar 0 (borra el primero)
+   
+📅 /calendario - Ver todos los eventos
+   Ejemplo: /calendario
+   
+🕐 /hoy - Eventos del día
+   Ejemplo: /hoy (hoy)
+   Ejemplo: /hoy 25-07 (fecha específica)
+   Si es después de 20hs muestra hoy + mañana
 
-✅ Todos los campos son opcionales y flexibles"""
+✅ **Todos los campos son flexibles:**
+   - Si no pones número de vuelo, se agrega igual
+   - Si no pones descripción, se agrega igual
+   - Puedes pasar links de Maps/Drive directamente
+
+📝 **Lugares:**
+   Entre comillas: /evento 23-07 14:48 vuelo "Aeropuerto Fiumicino"
+   Auto-genera link a Maps según el tipo de evento"""
     await update.message.reply_text(msg)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
