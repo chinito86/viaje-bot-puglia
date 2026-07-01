@@ -525,43 +525,45 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📭 Sin eventos")
             return
         
-        # Mostrar últimos 5 eventos
+        # Mostrar últimos 5 eventos con su número
         ultimos = eventos[-5:] if len(eventos) > 5 else eventos
         msg = "📄 VOUCHERS - Últimos eventos:\n\n"
         for i, evento in enumerate(ultimos):
-            idx = len(eventos) - len(ultimos) + i
+            num_evento = len(eventos) - len(ultimos) + i + 1  # Número 1-based
             fecha_hora = evento.get("Fecha/Hora", "")
             tipo = evento.get("Tipo", "")
             desc = evento.get("Descripción", "")
-            msg += f"{i}: {tipo} - {fecha_hora}\n   {desc}\n"
+            msg += f"#{num_evento}: {tipo} - {fecha_hora}\n   {desc}\n"
         
-        msg += "\n💬 Para agregar voucher:\n/voucher 0 https://drive.google.com/... \"Nombre\""
+        msg += "\n💬 Para agregar voucher:\n/voucher 8 https://drive.google.com/... \"Nombre\""
         await update.message.reply_text(msg)
         return
     
-    # Parsear: /voucher 0 https://link... "nombre"
+    # Parsear: /voucher 8 https://link... "nombre"
     pattern = r'/voucher\s+(\d+)\s+(https://[^\s]+)(?:\s+"([^"]*)")?'
     match = re.match(pattern, text)
     
     if not match:
-        await update.message.reply_text('💬 Formato: /voucher 0 https://drive.google.com/... "Nombre"')
+        await update.message.reply_text('💬 Formato: /voucher 8 https://drive.google.com/... "Nombre"')
         return
     
     try:
-        num = int(match.group(1))
+        num_evento = int(match.group(1))  # Número 1-based
         voucher_link = match.group(2)
         nombre = match.group(3) or "Voucher"
         
         eventos = get_eventos_list()
-        if num < 0 or num >= len(eventos):
-            await update.message.reply_text("⚠️ Número inválido")
+        idx = num_evento - 1  # Convertir a índice 0-based
+        
+        if idx < 0 or idx >= len(eventos):
+            await update.message.reply_text(f"⚠️ Evento #{num_evento} no existe")
             return
         
-        if update_evento_voucher(num, voucher_link):
-            evento = eventos[num]
+        if update_evento_voucher(idx, voucher_link):
+            evento = eventos[idx]
             tipo = evento.get("Tipo", "")
             desc = evento.get("Descripción", "")
-            msg = f"✅ Voucher agregado:\n🗓️ {tipo}\n📝 {desc}\n📄 [{nombre}]({voucher_link})"
+            msg = f"✅ Voucher agregado a Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📄 [{nombre}]({voucher_link})"
             await update.message.reply_text(msg)
         else:
             await update.message.reply_text("❌ Error al agregar voucher")
