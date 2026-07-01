@@ -400,6 +400,25 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error cmd_borrar: {e}")
             await update.message.reply_text("❌ Error")
 
+def generate_maps_link(tipo, lugar):
+    """Genera link a Google Maps según el tipo de evento"""
+    tipo_lower = tipo.lower()
+    
+    if "hospedaje" in tipo_lower or "hotel" in tipo_lower:
+        busqueda = f"Hotel {lugar}"
+    elif "vuelo" in tipo_lower or "aeropuerto" in tipo_lower:
+        busqueda = f"Aeropuerto {lugar}"
+    elif "tren" in tipo_lower or "estacion" in tipo_lower:
+        busqueda = f"Estación {lugar}"
+    elif "rent" in tipo_lower or "auto" in tipo_lower:
+        busqueda = f"Rent a Car {lugar}"
+    elif "comida" in tipo_lower or "restaurante" in tipo_lower:
+        busqueda = f"Restaurante {lugar}"
+    else:
+        busqueda = lugar
+    
+    return f"https://www.google.com/maps/search/{busqueda.replace(' ', '+')}"
+
 async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
