@@ -219,7 +219,7 @@ def update_evento_voucher(index, voucher_link):
         
         # Actualizar la fila (index + 2 porque fila 1 es header)
         row_number = index + 2
-        # Columna H es "Link Google Drive" (8)
+        # Columna H es "📄 Link Google Drive (vouchers)" (8)
         eventos.update_cell(row_number, 8, voucher_link)
         logger.info(f"✅ Voucher actualizado: evento {index}")
         return True
@@ -363,7 +363,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         evento = eventos[idx]
-        voucher = evento.get("Link Google Drive", "")
+        voucher = evento.get("📄 Link Google Drive (vouchers)", "")
         
         if not voucher:
             await query.edit_message_text(text=f"⚠️ Evento #{num_evento} sin voucher")
@@ -525,7 +525,7 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         desc = evento.get("Descripción", "")
         fecha_retorno = evento.get("Fecha/Hora Retorno", "")
         maps = evento.get("Link Google Maps", "")
-        voucher = evento.get("Link Google Drive", "")
+        voucher = evento.get("📄 Link Google Drive (vouchers)", "")
         
         msg += f"#{i}. {tipo.upper()}\n"
         msg += f"   📅 {fecha_hora}"
@@ -655,7 +655,7 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
         # Mostrar botones para eventos con voucher
         eventos_con_voucher = []
         for i, e in enumerate(eventos, 1):
-            if e.get("Link Google Drive", ""):
+            if e.get("📄 Link Google Drive (vouchers)", ""):
                 eventos_con_voucher.append((i, e))
         
         if not eventos_con_voucher:
@@ -699,7 +699,7 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
             return
         
         evento = eventos[idx]
-        voucher = evento.get("Link Google Drive", "")
+        voucher = evento.get("📄 Link Google Drive (vouchers)", "")
         
         if not voucher:
             await update.message.reply_text(f"⚠️ Evento #{num_evento} sin voucher")
