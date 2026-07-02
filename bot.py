@@ -570,7 +570,51 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error cmd_borrar: {e}")
             await update.message.reply_text("❌ Error")
 
-def generate_maps_link(tipo, lugar):
+def generate_calendar_link(fecha_str, hora_str, tipo, lugar, fecha_retorno=""):
+    """Genera link a Google Calendar para agregar evento"""
+    try:
+        from datetime import datetime
+        
+        # Parsear fecha inicio
+        fecha_obj = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
+        fecha_inicio = fecha_obj.strftime("%Y%m%dT%H%M%S")
+        
+        # Parsear fecha fin
+        if fecha_retorno:
+            try:
+                fecha_retorno_obj = datetime.strptime(fecha_retorno, "%Y-%m-%d %H:%M")
+                fecha_fin = fecha_retorno_obj.strftime("%Y%m%dT%H%M%S")
+            except:
+                # Si no se puede parsear, asumir 2 horas después
+                from datetime import timedelta
+                fecha_fin_obj = fecha_obj + timedelta(hours=2)
+                fecha_fin = fecha_fin_obj.strftime("%Y%m%dT%H%M%S")
+        else:
+            # Por defecto 2 horas después
+            from datetime import timedelta
+            fecha_fin_obj = fecha_obj + timedelta(hours=2)
+            fecha_fin = fecha_fin_obj.strftime("%Y%m%dT%H%M%S")
+        
+        # Construir URL
+        titulo = f"{tipo} - {lugar}"
+        detalles = f"Lugar: {lugar}"
+        
+        # URL encode
+        import urllib.parse
+        params = {
+            "action": "TEMPLATE",
+            "text": titulo,
+            "dates": f"{fecha_inicio}/{fecha_fin}",
+            "details": detalles,
+            "location": lugar
+        }
+        
+        query = urllib.parse.urlencode(params)
+        url = f"https://calendar.google.com/calendar/render?{query}"
+        return url
+    except Exception as e:
+        logger.error(f"Error generate_calendar_link: {e}")
+        return ""
     """Genera link a Google Maps según el tipo de evento"""
     tipo_lower = tipo.lower()
     
@@ -646,6 +690,12 @@ async def cmd_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if fecha_retorno:
                 msg += f"\n📅 Salida: {fecha_retorno}"
             msg += f"\n📍 {lugar}"
+            
+            # Generar Google Calendar link
+            cal_link = generate_calendar_link(str(fecha), hora_str, tipo_match, lugar, fecha_retorno)
+            if cal_link:
+                msg += f"\n\n[📅 Agregar a Google Calendar]({cal_link})"
+            
             if not voucher_link:
                 msg += f"\n\n👇 Para agregar voucher:\n/voucher {num_evento} https://drive.google.com/... \"Nombre\""
             await update.message.reply_text(msg)
@@ -912,6 +962,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📅 /evento - Agregar evento
    Formato: /evento 23-07 14:48 vuelo "Lugar" ["Retorno"]
    Ejemplo: /evento 25-07 10:00 rent-a-car "Avis" "27-07 18:00"
+   ✅ Auto-genera link a Google Maps
+   ✅ Muestra link para agregar a Google Calendar
    
 📄 /voucher - Agregar voucher a evento
    /voucher (muestra últimos 5)
