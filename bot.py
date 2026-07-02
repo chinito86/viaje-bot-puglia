@@ -369,7 +369,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text=f"⚠️ Evento #{num_evento} sin voucher")
             return
         
-        tipo = evento.get("🏷️ Tipo, "")
+        tipo = evento.get("🏷️ Tipo (Vuelo, Tren, Rent a Car, Hospedaje, Excursión, Comida, Reserva)", "")
         desc = evento.get("📝 Descripción", "")
         fecha_hora = evento.get("📅 Fecha/Hora", "")
         
@@ -521,7 +521,7 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = "📅 CALENDARIO:\n\n"
     for i, evento in enumerate(eventos, 1):
         fecha_hora = evento.get("📅 Fecha/Hora", "")
-        tipo = evento.get("🏷️ Tipo, "")
+        tipo = evento.get("🏷️ Tipo (Vuelo, Tren, Rent a Car, Hospedaje, Excursión, Comida, Reserva)", "")
         desc = evento.get("📝 Descripción", "")
         fecha_retorno = evento.get("📅 Fecha/Hora Retorno", "")
         maps = evento.get("🗺️ Link Google Maps", "")
@@ -603,7 +603,7 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, evento in enumerate(ultimos):
             num_evento = len(eventos) - len(ultimos) + i + 1  # Número 1-based
             fecha_hora = evento.get("📅 Fecha/Hora", "")
-            tipo = evento.get("🏷️ Tipo, "")
+            tipo = evento.get("🏷️ Tipo (Vuelo, Tren, Rent a Car, Hospedaje, Excursión, Comida, Reserva)", "")
             desc = evento.get("📝 Descripción", "")
             msg += f"#{num_evento}: {tipo} - {fecha_hora}\n   {desc}\n"
         
@@ -633,7 +633,7 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if update_evento_voucher(idx, voucher_link):
             evento = eventos[idx]
-            tipo = evento.get("🏷️ Tipo, "")
+            tipo = evento.get("🏷️ Tipo (Vuelo, Tren, Rent a Car, Hospedaje, Excursión, Comida, Reserva)", "")
             desc = evento.get("📝 Descripción", "")
             msg = f"✅ Voucher agregado a Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📄 [{nombre}]({voucher_link})"
             await update.message.reply_text(msg)
@@ -666,7 +666,7 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = []
         fila = []
         for num, evento in eventos_con_voucher:
-            tipo = evento.get("🏷️ Tipo, "")
+            tipo = evento.get("🏷️ Tipo (Vuelo, Tren, Rent a Car, Hospedaje, Excursión, Comida, Reserva)", "")
             desc = evento.get("📝 Descripción", "")[:20]  # Primeros 20 caracteres
             texto_btn = f"#{num} {tipo}"
             fila.append(InlineKeyboardButton(texto_btn, callback_data=f"voucher_ver_{num}"))
@@ -705,7 +705,7 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text(f"⚠️ Evento #{num_evento} sin voucher")
             return
         
-        tipo = evento.get("🏷️ Tipo, "")
+        tipo = evento.get("🏷️ Tipo (Vuelo, Tren, Rent a Car, Hospedaje, Excursión, Comida, Reserva)", "")
         desc = evento.get("📝 Descripción", "")
         fecha_hora = evento.get("📅 Fecha/Hora", "")
         
