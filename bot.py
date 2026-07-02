@@ -615,6 +615,8 @@ def generate_calendar_link(fecha_str, hora_str, tipo, lugar, fecha_retorno=""):
     except Exception as e:
         logger.error(f"Error generate_calendar_link: {e}")
         return ""
+
+def generate_maps_link(tipo, lugar):
     """Genera link a Google Maps según el tipo de evento"""
     tipo_lower = tipo.lower()
     
