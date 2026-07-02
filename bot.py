@@ -197,10 +197,10 @@ def get_eventos_by_date(fecha):
         eventos = get_eventos_list()
         resultado = []
         for e in eventos:
-            evento_fecha = e.get("Fecha/Hora", "").split()[0]
+            evento_fecha = e.get("📅 Fecha/Hora", "").split()[0]
             if evento_fecha == str(fecha):
                 resultado.append(e)
-        return sorted(resultado, key=lambda x: x.get("Fecha/Hora", ""))
+        return sorted(resultado, key=lambda x: x.get("📅 Fecha/Hora", ""))
     except Exception as e:
         logger.error(f"Error get_eventos_by_date: {e}")
         return []
@@ -369,9 +369,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(text=f"⚠️ Evento #{num_evento} sin voucher")
             return
         
-        tipo = evento.get("Tipo", "")
-        desc = evento.get("Descripción", "")
-        fecha_hora = evento.get("Fecha/Hora", "")
+        tipo = evento.get("🏷️ Tipo, "")
+        desc = evento.get("📝 Descripción", "")
+        fecha_hora = evento.get("📅 Fecha/Hora", "")
         
         msg = f"📄 Voucher Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📅 {fecha_hora}\n\n[Abrir Voucher]({voucher})"
         await query.edit_message_text(text=msg)
@@ -520,11 +520,11 @@ async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     msg = "📅 CALENDARIO:\n\n"
     for i, evento in enumerate(eventos, 1):
-        fecha_hora = evento.get("Fecha/Hora", "")
-        tipo = evento.get("Tipo", "")
-        desc = evento.get("Descripción", "")
-        fecha_retorno = evento.get("Fecha/Hora Retorno", "")
-        maps = evento.get("Link Google Maps", "")
+        fecha_hora = evento.get("📅 Fecha/Hora", "")
+        tipo = evento.get("🏷️ Tipo, "")
+        desc = evento.get("📝 Descripción", "")
+        fecha_retorno = evento.get("📅 Fecha/Hora Retorno", "")
+        maps = evento.get("🗺️ Link Google Maps", "")
         voucher = evento.get("📄 Link Google Drive (vouchers)", "")
         
         msg += f"#{i}. {tipo.upper()}\n"
@@ -568,7 +568,7 @@ async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for e in eventos:
             tipo = e.get("Tipo", "")
             desc = e.get("Descripción", "")
-            fecha_hora = e.get("Fecha/Hora", "")
+            fecha_hora = e.get("📅 Fecha/Hora", "")
             hora = fecha_hora.split()[1] if " " in fecha_hora else ""
             msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
@@ -582,7 +582,7 @@ async def cmd_hoy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for e in eventos_manana:
                 tipo = e.get("Tipo", "")
                 desc = e.get("Descripción", "")
-                fecha_hora = e.get("Fecha/Hora", "")
+                fecha_hora = e.get("📅 Fecha/Hora", "")
                 hora = fecha_hora.split()[1] if " " in fecha_hora else ""
                 msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
@@ -602,9 +602,9 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = "📄 VOUCHERS - Últimos eventos:\n\n"
         for i, evento in enumerate(ultimos):
             num_evento = len(eventos) - len(ultimos) + i + 1  # Número 1-based
-            fecha_hora = evento.get("Fecha/Hora", "")
-            tipo = evento.get("Tipo", "")
-            desc = evento.get("Descripción", "")
+            fecha_hora = evento.get("📅 Fecha/Hora", "")
+            tipo = evento.get("🏷️ Tipo, "")
+            desc = evento.get("📝 Descripción", "")
             msg += f"#{num_evento}: {tipo} - {fecha_hora}\n   {desc}\n"
         
         msg += "\n💬 Para agregar voucher:\n/voucher 8 https://drive.google.com/... \"Nombre\""
@@ -633,8 +633,8 @@ async def cmd_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if update_evento_voucher(idx, voucher_link):
             evento = eventos[idx]
-            tipo = evento.get("Tipo", "")
-            desc = evento.get("Descripción", "")
+            tipo = evento.get("🏷️ Tipo, "")
+            desc = evento.get("📝 Descripción", "")
             msg = f"✅ Voucher agregado a Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📄 [{nombre}]({voucher_link})"
             await update.message.reply_text(msg)
         else:
@@ -666,8 +666,8 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = []
         fila = []
         for num, evento in eventos_con_voucher:
-            tipo = evento.get("Tipo", "")
-            desc = evento.get("Descripción", "")[:20]  # Primeros 20 caracteres
+            tipo = evento.get("🏷️ Tipo, "")
+            desc = evento.get("📝 Descripción", "")[:20]  # Primeros 20 caracteres
             texto_btn = f"#{num} {tipo}"
             fila.append(InlineKeyboardButton(texto_btn, callback_data=f"voucher_ver_{num}"))
             
@@ -705,9 +705,9 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text(f"⚠️ Evento #{num_evento} sin voucher")
             return
         
-        tipo = evento.get("Tipo", "")
-        desc = evento.get("Descripción", "")
-        fecha_hora = evento.get("Fecha/Hora", "")
+        tipo = evento.get("🏷️ Tipo, "")
+        desc = evento.get("📝 Descripción", "")
+        fecha_hora = evento.get("📅 Fecha/Hora", "")
         
         msg = f"📄 Voucher Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📅 {fecha_hora}\n\n[Abrir Voucher]({voucher})"
         await update.message.reply_text(msg)
@@ -735,7 +735,7 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
         for e in eventos:
             tipo = e.get("Tipo", "")
             desc = e.get("Descripción", "")
-            fecha_hora = e.get("Fecha/Hora", "")
+            fecha_hora = e.get("📅 Fecha/Hora", "")
             hora = fecha_hora.split()[1] if " " in fecha_hora else ""
             msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
@@ -749,7 +749,7 @@ async def cmd_voucher_consultar(update: Update, context: ContextTypes.DEFAULT_TY
             for e in eventos_manana:
                 tipo = e.get("Tipo", "")
                 desc = e.get("Descripción", "")
-                fecha_hora = e.get("Fecha/Hora", "")
+                fecha_hora = e.get("📅 Fecha/Hora", "")
                 hora = fecha_hora.split()[1] if " " in fecha_hora else ""
                 msg += f"🕐 {hora} - {tipo}\n{desc}\n\n"
     
