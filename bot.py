@@ -903,33 +903,37 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = """❓ AYUDA - Bot Gastos Puglia 2026
 
 💰 /gasto - Registrar gasto
-   Formato: /gasto 25 EUR comida descripcion
+   Formato: /gasto 25EUR comida - descripcion
    ✅ Auto-detecta persona por username
-   ✅ Si no tiene username, muestra botones para elegir
-   Ejemplo: /gasto 45 EUR transporte Uber desde hotel
+   ✅ Si no tiene username, muestra botones
    
 📅 /evento - Agregar evento
-   Formato: /evento FECHA HORA TIPO "LUGAR" [Links]
-   Ejemplo: /evento 23-07 14:48 vuelo "Aeropuerto Leonardo da Vinci"
-   Tipos: Vuelo, Tren, Rent a Car, Hospedaje, Excursion, Comida, Reserva
+   Formato: /evento 23-07 14:48 vuelo "Lugar" ["Retorno"]
+   Ejemplo: /evento 25-07 10:00 rent-a-car "Avis" "27-07 18:00"
+   
+📄 /voucher - Agregar voucher a evento
+   /voucher (muestra últimos 5)
+   /voucher 8 https://drive.google.com/... "Nombre"
+   
+📄 /voucherconsultar - Ver vouchers
+   /voucherconsultar (botones interactivos)
+   
+📝 /notas - Guardar notas y links
+   /notas (muestra últimas 5)
+   /notas Polignano - Playas https://maps.google.com/...
+   /notas La Praja Club (sin link)
+   /notas delete 1 (borrar nota)
    
 📊 /resumen - Ver totales por persona
    
 🗑️ /borrar - Eliminar gasto
-   Paso 1: /borrar (muestra últimos 5)
-   Paso 2: /borrar 0 (borra el primero)
+   /borrar (muestra últimos 5)
+   /borrar 0 (borra el primero)
    
 📅 /calendario - Ver todos los eventos
    
 🕐 /hoy - Eventos del día
-   Opción 1: /hoy (hoy)
-   Opción 2: /hoy 25-07 (fecha específica)
-   Si es después de 20hs muestra hoy + mañana
-
-✅ **Lógica de persona en /gasto:**
-   1️⃣ Si tienes username registrado → Auto-detecta
-   2️⃣ Si escribes el nombre → Lo usa
-   3️⃣ Si no tienes username Y no escribes nombre → Muestra botones para elegir"""
+   /hoy o /hoy 25-07"""
     await update.message.reply_text(msg)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
