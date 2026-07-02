@@ -205,7 +205,69 @@ def get_eventos_by_date(fecha):
         logger.error(f"Error get_eventos_by_date: {e}")
         return []
 
-def update_evento_voucher(index, voucher_link):
+def add_nota(descripcion, link=""):
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return False
+        try:
+            notas = sheet.worksheet("Notas")
+        except:
+            # Crear pestaña si no existe
+            notas = sheet.add_worksheet(title="Notas", rows=1000, cols=4)
+            notas.append_row(["Fecha", "Descripción", "Link", "Timestamp"])
+        
+        fecha = datetime.now().strftime("%Y-%m-%d")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        row = [fecha, descripcion, link, timestamp]
+        notas.append_row(row)
+        logger.info(f"✅ Nota: {descripcion}")
+        return True
+    except Exception as e:
+        logger.error(f"Error add_nota: {e}")
+        return False
+
+def get_notas_list():
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return []
+        try:
+            notas = sheet.worksheet("Notas")
+        except:
+            return []
+        data = notas.get_all_records()
+        return data
+    except Exception as e:
+        logger.error(f"Error get_notas_list: {e}")
+        return []
+
+def delete_nota(index):
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return False
+        notas = sheet.worksheet("Notas")
+        notas.delete_rows(index + 2)  # +2 porque fila 1 es header
+        logger.info(f"✅ Nota eliminada: fila {index + 2}")
+        return True
+    except Exception as e:
+        logger.error(f"Error delete_nota: {e}")
+        return False
+
+def update_nota_link(index, link):
+    try:
+        sheet = init_sheets()
+        if not sheet:
+            return False
+        notas = sheet.worksheet("Notas")
+        row_number = index + 2
+        notas.update_cell(row_number, 3, link)  # Columna 3 es Link
+        logger.info(f"✅ Link actualizado: nota {index}")
+        return True
+    except Exception as e:
+        logger.error(f"Error update_nota_link: {e}")
+        return False
     """Actualiza el link de voucher de un evento"""
     try:
         sheet = init_sheets()
@@ -376,7 +438,89 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"📄 Voucher Evento #{num_evento}:\n🗓️ {tipo}\n📝 {desc}\n📅 {fecha_hora}\n\n[Abrir Voucher]({voucher})"
         await query.edit_message_text(text=msg)
 
-async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_notas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    
+    if text == "/notas":
+        notas = get_notas_list()
+        if not notas:
+            await update.message.reply_text("📭 Sin notas")
+            return
+        
+        # Mostrar últimas 5
+        ultimas = notas[-5:] if len(notas) > 5 else notas
+        msg = "📝 NOTAS:\n\n"
+        for i, nota in enumerate(ultimas):
+            idx = len(notas) - len(ultimas) + i + 1
+            desc = nota.get("Descripción", "")
+            link = nota.get("Link", "")
+            msg += f"#{idx}: {desc}\n"
+            if link:
+                msg += f"   🔗 [Link]({link})\n"
+            msg += "\n"
+        
+        msg += "💬 Agregar: /notas descripción [link]\n"
+        msg += "💬 Borrar: /notas delete 1"
+        await update.message.reply_text(msg)
+        return
+    
+    # Parsear: /notas delete N
+    pattern_delete = r'/notas\s+delete\s+(\d+)'
+    match_delete = re.match(pattern_delete, text)
+    
+    if match_delete:
+        try:
+            num = int(match_delete.group(1))
+            notas = get_notas_list()
+            idx = num - 1
+            
+            if idx < 0 or idx >= len(notas):
+                await update.message.reply_text(f"⚠️ Nota #{num} no existe")
+                return
+            
+            nota = notas[idx]
+            if delete_nota(idx):
+                desc = nota.get("Descripción", "")
+                msg = f"✅ Nota eliminada:\n📝 {desc}"
+                await update.message.reply_text(msg)
+            else:
+                await update.message.reply_text("❌ Error al eliminar")
+        except Exception as e:
+            logger.error(f"Error delete nota: {e}")
+            await update.message.reply_text("❌ Error")
+        return
+    
+    # Parsear: /notas descripción [link]
+    pattern_add = r'/notas\s+(.+)'
+    match_add = re.match(pattern_add, text)
+    
+    if match_add:
+        resto = match_add.group(1)
+        
+        # Buscar links
+        urls = re.findall(r'https?://[^\s]+', resto)
+        link = urls[0] if urls else ""
+        
+        # Limpiar descripción de links
+        descripcion = resto
+        for url in urls:
+            descripcion = descripcion.replace(url, "").strip()
+        
+        descripcion = descripcion.strip()
+        
+        if not descripcion:
+            await update.message.reply_text("💬 Formato: /notas descripción [link]")
+            return
+        
+        if add_nota(descripcion, link):
+            num_nota = len(get_notas_list())
+            msg = f"✅ Nota #{num_nota}:\n📝 {descripcion}"
+            if link:
+                msg += f"\n🔗 [Link]({link})"
+            msg += f"\n\n💬 Para actualizar link:\n/notaslink {num_nota} https://..."
+            await update.message.reply_text(msg)
+        else:
+            await update.message.reply_text("❌ Error al guardar")
     summary = get_gastos_summary()
     msg = "📊 RESUMEN:\n\n"
     for persona in PEOPLE:
@@ -835,6 +979,7 @@ def main():
             app.add_handler(CommandHandler("hoy", cmd_hoy))
             app.add_handler(CommandHandler("voucher", cmd_voucher))
             app.add_handler(CommandHandler("voucherconsultar", cmd_voucher_consultar))
+            app.add_handler(CommandHandler("notas", cmd_notas))
             app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(MessageHandler(filters.Regex(r"^/gasto"), process_gasto))
             app.add_handler(MessageHandler(filters.Regex(r"^/borrar"), cmd_borrar))
