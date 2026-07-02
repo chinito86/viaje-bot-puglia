@@ -521,6 +521,8 @@ async def cmd_notas(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(msg)
         else:
             await update.message.reply_text("❌ Error al guardar")
+
+async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = get_gastos_summary()
     msg = "📊 RESUMEN:\n\n"
     for persona in PEOPLE:
